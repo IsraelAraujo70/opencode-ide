@@ -211,6 +211,12 @@ export interface AppState {
     query: string
     items: PaletteItem[]
   }
+  filePicker: {
+    isOpen: boolean
+  }
+  themePicker: {
+    isOpen: boolean
+  }
   terminals: Map<string, TerminalState>
   diagnostics: Map<string, Diagnostic[]> // bufferId -> diagnostics
 }
@@ -267,6 +273,7 @@ export type AppAction =
   
   // Workspace
   | { type: "SET_WORKSPACE"; path: string }
+  | { type: "SET_DIRECTORY_TREE"; tree: DirectoryTree }
   | { type: "REFRESH_TREE" }
   | { type: "TOGGLE_DIRECTORY"; path: string }
   
@@ -274,3 +281,11 @@ export type AppAction =
   | { type: "SPLIT_PANE"; direction: PaneDirection }
   | { type: "CLOSE_PANE"; paneId: string }
   | { type: "RESIZE_PANE"; paneId: string; size: number }
+  
+  // File Picker
+  | { type: "OPEN_FILE_PICKER" }
+  | { type: "CLOSE_FILE_PICKER" }
+  
+  // Theme Picker
+  | { type: "OPEN_THEME_PICKER" }
+  | { type: "CLOSE_THEME_PICKER" }

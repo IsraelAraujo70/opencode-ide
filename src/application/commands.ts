@@ -141,8 +141,8 @@ commandRegistry.register({
     const path = argsArray[0]
     
     if (!path) {
-      // TODO: Open file picker
-      store.dispatch({ type: "OPEN_PALETTE" })
+      // Open file picker when no path provided
+      store.dispatch({ type: "OPEN_FILE_PICKER" })
       return
     }
 
@@ -233,8 +233,8 @@ commandRegistry.register({
       store.dispatch({ type: "SET_THEME", themeId: themeName })
       await settings.set("theme", themeName)
     } else {
-      // Toggle theme if no name provided
-      store.dispatch({ type: "TOGGLE_THEME" })
+      // Open theme picker if no name provided
+      store.dispatch({ type: "OPEN_THEME_PICKER" })
     }
   },
 })
@@ -356,6 +356,46 @@ commandRegistry.register({
   category: "UI",
   execute: () => {
     store.dispatch({ type: "CLOSE_PALETTE" })
+  },
+})
+
+// File Picker
+commandRegistry.register({
+  id: "filePicker.open",
+  name: "Open File Picker",
+  category: "UI",
+  description: "Open the file browser dialog",
+  execute: () => {
+    store.dispatch({ type: "OPEN_FILE_PICKER" })
+  },
+})
+
+commandRegistry.register({
+  id: "filePicker.close",
+  name: "Close File Picker",
+  category: "UI",
+  execute: () => {
+    store.dispatch({ type: "CLOSE_FILE_PICKER" })
+  },
+})
+
+// Theme Picker
+commandRegistry.register({
+  id: "themePicker.open",
+  name: "Open Theme Picker",
+  category: "UI",
+  description: "Open the theme selection dialog",
+  execute: () => {
+    store.dispatch({ type: "OPEN_THEME_PICKER" })
+  },
+})
+
+commandRegistry.register({
+  id: "themePicker.close",
+  name: "Close Theme Picker",
+  category: "UI",
+  execute: () => {
+    store.dispatch({ type: "CLOSE_THEME_PICKER" })
   },
 })
 

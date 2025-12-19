@@ -21,6 +21,7 @@ const defaultKeybindings: KeybindingConfig[] = [
   // File operations
   { key: "s", ctrl: true, command: "file.save" },
   { key: "n", ctrl: true, command: "file.new" },
+  { key: "o", ctrl: true, command: "filePicker.open" },
   { key: "w", ctrl: true, command: "tab.close" },
   
   // Navigation
@@ -36,6 +37,7 @@ const defaultKeybindings: KeybindingConfig[] = [
   
   // Theme
   { key: "t", ctrl: true, shift: true, command: "theme.toggle" },
+  { key: "k", ctrl: true, command: "themePicker.open" },
   
   // Focus
   { key: "e", ctrl: true, shift: true, command: "focus.explorer" },
@@ -54,6 +56,14 @@ export function useKeybindings() {
       }
       if (state.palette.isOpen) {
         commandRegistry.execute("palette.close")
+        return
+      }
+      if (state.filePicker.isOpen) {
+        commandRegistry.execute("filePicker.close")
+        return
+      }
+      if (state.themePicker.isOpen) {
+        commandRegistry.execute("themePicker.close")
         return
       }
       // Escape from editor focus (for : command line)

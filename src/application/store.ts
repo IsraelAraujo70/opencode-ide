@@ -55,6 +55,12 @@ export const createInitialState = (): AppState => ({
     query: "",
     items: [],
   },
+  filePicker: {
+    isOpen: false,
+  },
+  themePicker: {
+    isOpen: false,
+  },
   terminals: new Map(),
   diagnostics: new Map(),
 })
@@ -502,6 +508,16 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       }
     }
 
+    case "SET_DIRECTORY_TREE": {
+      return {
+        ...state,
+        workspace: {
+          ...state.workspace,
+          directoryTree: action.tree,
+        },
+      }
+    }
+
     case "REFRESH_TREE": {
       // Tree refresh is handled async externally
       return state
@@ -534,6 +550,36 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "RESIZE_PANE":
       // TODO: Implement pane splitting/resizing
       return state
+
+    case "OPEN_FILE_PICKER": {
+      return {
+        ...state,
+        filePicker: { isOpen: true },
+      }
+    }
+
+    case "CLOSE_FILE_PICKER": {
+      return {
+        ...state,
+        filePicker: { isOpen: false },
+        focusTarget: "editor",
+      }
+    }
+
+    case "OPEN_THEME_PICKER": {
+      return {
+        ...state,
+        themePicker: { isOpen: true },
+      }
+    }
+
+    case "CLOSE_THEME_PICKER": {
+      return {
+        ...state,
+        themePicker: { isOpen: false },
+        focusTarget: "editor",
+      }
+    }
 
     default:
       return state

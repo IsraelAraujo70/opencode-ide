@@ -2,6 +2,7 @@
  * Main App Component - Root layout for OpenCode IDE
  */
 
+import { useEffect } from "react"
 import { useTerminalDimensions } from "@opentui/react"
 import { useStore } from "./hooks/useStore.ts"
 import { StatusBar } from "./components/StatusBar.tsx"
@@ -10,8 +11,11 @@ import { Explorer } from "./components/Explorer.tsx"
 import { Editor } from "./components/Editor.tsx"
 import { CommandLine } from "./components/CommandLine.tsx"
 import { Palette } from "./components/Palette.tsx"
+import { FilePicker } from "./components/FilePicker.tsx"
+import { ThemePicker } from "./components/ThemePicker.tsx"
 import { useKeybindings } from "./hooks/useKeybindings.ts"
 import { parseAndExecuteCommand } from "../application/commands.ts"
+import { fileSystem } from "../adapters/index.ts"
 
 export function App() {
   const { width, height } = useTerminalDimensions()
@@ -19,6 +23,23 @@ export function App() {
   
   // Initialize global keybindings
   useKeybindings()
+  
+  // Auto-load current directory on startup
+  useEffect(() => {
+    const loadWorkspace = async () => {
+      const cwd = process.cwd()
+      dispatch({ type: "SET_WORKSPACE", path: cwd })
+      
+      try {
+        const tree = await fileSystem.buildTree(cwd, 2)
+        dispatch({ type: "SET_DIRECTORY_TREE", tree })
+      } catch (error) {
+        console.error("Failed to load workspace:", error)
+      }
+    }
+    
+    loadWorkspace()
+  }, [])
   
   // Calculate layout dimensions
   const explorerWidth = 25
@@ -31,7 +52,7 @@ export function App() {
   // Get active buffer for the editor
   const activePane = getActivePane(state.layout)
   const activeTab = activePane?.tabs.find(t => t.isActive)
-  const activeBuffer = activeTab ? state.buffers.get(activeTab.bufferId) : null
+  const activeBuffer = activeTab ? state.buffers.get(activeTab.bufferId) ?? null : null
   
   return (
     <box
@@ -120,6 +141,35 @@ export function App() {
           height={Math.min(20, height - 4)}
           onClose={() => dispatch({ type: "CLOSE_PALETTE" })}
           onQueryChange={(query: string) => dispatch({ type: "SET_PALETTE_QUERY", query })}
+        />
+      )}
+      
+      {/* File Picker Overlay */}
+      {state.filePicker.isOpen && (
+        <FilePicker
+          theme={state.theme}
+          width={Math.min(60, width - 4)}
+          height={Math.min(20, height - 4)}
+          initialPath={state.workspace.rootPath || process.cwd()}
+          onSelect={(path: string) => {
+            dispatch({ type: "CLOSE_FILE_PICKER" })
+            dispatch({ type: "OPEN_FILE", path })
+          }}
+          onCancel={() => dispatch({ type: "CLOSE_FILE_PICKER" })}
+        />
+      )}
+      
+      {/* Theme Picker Overlay */}
+      {state.themePicker.isOpen && (
+        <ThemePicker
+          currentTheme={state.theme}
+          width={Math.min(50, width - 4)}
+          height={Math.min(16, height - 4)}
+          onSelect={(themeId: string) => {
+            dispatch({ type: "CLOSE_THEME_PICKER" })
+            dispatch({ type: "SET_THEME", themeId })
+          }}
+          onCancel={() => dispatch({ type: "CLOSE_THEME_PICKER" })}
         />
       )}
     </box>
