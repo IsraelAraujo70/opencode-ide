@@ -9,7 +9,7 @@
 
 import type { Command } from "../domain/types.ts"
 import { store } from "./store.ts"
-import { fileSystem, clipboard, settings } from "../adapters/index.ts"
+import { fileSystem, clipboard, settings, cleanupAndExit } from "../adapters/index.ts"
 
 class CommandRegistry {
   private commands: Map<string, Command> = new Map()
@@ -274,9 +274,9 @@ commandRegistry.register({
   id: "app.quit",
   name: "Quit",
   category: "Application",
-  execute: () => {
+  execute: async () => {
     // TODO: Check for unsaved changes
-    process.exit(0)
+    await cleanupAndExit(0)
   },
 })
 
@@ -284,9 +284,9 @@ commandRegistry.register({
   id: "app.quitAll",
   name: "Quit All",
   category: "Application",
-  execute: () => {
+  execute: async () => {
     // TODO: Check for unsaved changes in all buffers
-    process.exit(0)
+    await cleanupAndExit(0)
   },
 })
 
