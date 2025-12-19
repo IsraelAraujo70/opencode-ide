@@ -69,20 +69,27 @@ function TabItem({ tab, isActive, theme }: TabItemProps) {
   }
 
   return (
-    <box backgroundColor={bg} paddingLeft={1} paddingRight={1} onMouseDown={handleClick}>
-      <text fg={fg} bg={bg}>
-        {` ${label} `}
-      </text>
-      <text
-        fg={colors.error}
-        bg={bg}
+    <box backgroundColor={bg} flexDirection="row">
+      <box backgroundColor={bg} paddingLeft={1} paddingRight={1} onMouseDown={handleClick}>
+        <text fg={fg} bg={bg}>
+          {` ${label} `}
+        </text>
+      </box>
+
+      <box
+        backgroundColor={bg}
+        paddingLeft={1}
+        paddingRight={1}
         onMouseDown={e => {
           e.stopPropagation()
+          e.preventDefault()
           handleClose()
         }}
       >
-        ×
-      </text>
+        <text fg={colors.error} bg={bg}>
+          ×
+        </text>
+      </box>
     </box>
   )
 }
