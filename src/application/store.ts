@@ -545,6 +545,32 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       }
     }
 
+    case "LOAD_DIRECTORY_CHILDREN": {
+      if (!state.workspace.directoryTree) return state
+      
+      const loadChildrenInTree = (node: DirectoryTree): DirectoryTree => {
+        if (node.entry.path === action.path) {
+          return { 
+            ...node, 
+            children: action.children,
+            isExpanded: true,
+          }
+        }
+        return {
+          ...node,
+          children: node.children.map(loadChildrenInTree),
+        }
+      }
+      
+      return {
+        ...state,
+        workspace: {
+          ...state.workspace,
+          directoryTree: loadChildrenInTree(state.workspace.directoryTree),
+        },
+      }
+    }
+
     case "SPLIT_PANE":
     case "CLOSE_PANE":
     case "RESIZE_PANE":

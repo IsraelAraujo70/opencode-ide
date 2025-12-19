@@ -274,6 +274,7 @@ export type AppAction =
   // Workspace
   | { type: "SET_WORKSPACE"; path: string }
   | { type: "SET_DIRECTORY_TREE"; tree: DirectoryTree }
+  | { type: "LOAD_DIRECTORY_CHILDREN"; path: string; children: DirectoryTree[] }
   | { type: "REFRESH_TREE" }
   | { type: "TOGGLE_DIRECTORY"; path: string }
   
