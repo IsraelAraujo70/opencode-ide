@@ -8,6 +8,7 @@ import { useStore } from "./hooks/useStore.ts"
 import { StatusBar } from "./components/StatusBar"
 import { TabBar } from "./components/TabBar"
 import { Explorer } from "./components/Explorer"
+import { ResizeHandle } from "./components/ResizeHandle"
 import { Editor } from "./components/Editor"
 import { CommandLine } from "./components/CommandLine"
 import { Palette } from "./components/Palette"
@@ -42,13 +43,23 @@ export function App() {
   }, [])
 
   // Calculate layout dimensions
-  const explorerWidth = 25
+  const resizeHandleWidth = 2
+  const minExplorerWidth = 8
+  const editorMinWidth = 20
+  const maxExplorerWidth = Math.max(minExplorerWidth, width - resizeHandleWidth - editorMinWidth)
+  const explorerWidth = Math.max(minExplorerWidth, Math.min(maxExplorerWidth, state.explorerWidth))
+
   const statusBarHeight = 1
   const tabBarHeight = 1
   const terminalHeight =
     state.terminals.size > 0 ? Math.floor((height - statusBarHeight - tabBarHeight) * 0.3) : 0
   const editorHeight = height - statusBarHeight - tabBarHeight - terminalHeight
-  const editorWidth = width - explorerWidth
+  const editorWidth = Math.max(0, width - explorerWidth - resizeHandleWidth)
+
+  const handleExplorerResize = (nextWidth: number) => {
+    const clampedWidth = Math.max(minExplorerWidth, Math.min(maxExplorerWidth, nextWidth))
+    dispatch({ type: "SET_EXPLORER_WIDTH", width: clampedWidth })
+  }
 
   // Get active buffer for the editor
   const activePane = getActivePane(state.layout)
@@ -80,6 +91,13 @@ export function App() {
           rootPath={state.workspace.rootPath}
           theme={state.theme}
           focused={state.focusTarget === "explorer"}
+        />
+
+        <ResizeHandle
+          height={editorHeight}
+          theme={state.theme}
+          explorerWidth={explorerWidth}
+          onResize={handleExplorerResize}
         />
 
         {/* Editor Area */}

@@ -200,6 +200,7 @@ export interface AppState {
   }
   buffers: Map<string, BufferState>
   layout: PaneLayout
+  explorerWidth: number
   theme: Theme
   focusTarget: FocusTarget
   commandLine: {
@@ -282,6 +283,9 @@ export type AppAction =
   | { type: "SPLIT_PANE"; direction: PaneDirection }
   | { type: "CLOSE_PANE"; paneId: string }
   | { type: "RESIZE_PANE"; paneId: string; size: number }
+
+  // Explorer
+  | { type: "SET_EXPLORER_WIDTH"; width: number }
 
   // File Picker
   | { type: "OPEN_FILE_PICKER" }

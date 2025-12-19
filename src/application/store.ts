@@ -44,6 +44,7 @@ export const createInitialState = (): AppState => ({
   },
   buffers: new Map(),
   layout: createInitialLayout(),
+  explorerWidth: 25,
   theme: defaultTheme,
   focusTarget: "editor",
   commandLine: {
@@ -327,6 +328,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "SET_FOCUS": {
       return { ...state, focusTarget: action.target }
+    }
+
+    case "SET_EXPLORER_WIDTH": {
+      const minWidth = 8
+      const width = Math.max(minWidth, Math.floor(action.width))
+      return { ...state, explorerWidth: width }
     }
 
     case "SWITCH_TAB": {
