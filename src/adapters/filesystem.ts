@@ -1,0 +1,169 @@
+/**
+ * FileSystem Adapter - Bun implementation
+ */
+
+import type {
+  FileSystemPort,
+  FileWatchEvent,
+  FileWatcher,
+  FileStat,
+} from "../ports/index.ts"
+import type { FileEntry, DirectoryTree } from "../domain/types.ts"
+import { watch } from "fs"
+import { join, basename } from "path"
+
+export class BunFileSystemAdapter implements FileSystemPort {
+  async readFile(path: string): Promise<string> {
+    const file = Bun.file(path)
+    return await file.text()
+  }
+
+  async writeFile(path: string, content: string): Promise<void> {
+    await Bun.write(path, content)
+  }
+
+  async listDirectory(path: string): Promise<FileEntry[]> {
+    const entries: FileEntry[] = []
+    const glob = new Bun.Glob("*")
+    
+    for await (const name of glob.scan({ cwd: path, onlyFiles: false })) {
+      const fullPath = join(path, name)
+      let isDir = false
+      let size = 0
+      
+      try {
+        // Check if it's a directory by trying to list it
+        const stat = await this.stat(fullPath)
+        isDir = stat.isDirectory
+        size = stat.size
+      } catch {
+        // If stat fails, assume file
+      }
+      
+      entries.push({
+        name,
+        path: fullPath,
+        type: isDir ? "directory" : "file",
+        size: isDir ? undefined : size,
+      })
+    }
+    
+    // Sort: directories first, then alphabetically
+    return entries.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "directory" ? -1 : 1
+      }
+      return a.name.localeCompare(b.name)
+    })
+  }
+
+  async buildTree(path: string, depth = 3): Promise<DirectoryTree> {
+    const name = basename(path)
+    const entry: FileEntry = {
+      name,
+      path,
+      type: "directory",
+    }
+
+    if (depth <= 0) {
+      return { entry, children: [], isExpanded: false }
+    }
+
+    const children: DirectoryTree[] = []
+    const entries = await this.listDirectory(path)
+
+    for (const e of entries) {
+      if (e.type === "directory") {
+        const subtree = await this.buildTree(e.path, depth - 1)
+        children.push(subtree)
+      } else {
+        children.push({
+          entry: e,
+          children: [],
+          isExpanded: false,
+        })
+      }
+    }
+
+    return { entry, children, isExpanded: true }
+  }
+
+  async exists(path: string): Promise<boolean> {
+    const file = Bun.file(path)
+    return await file.exists()
+  }
+
+  async isDirectory(path: string): Promise<boolean> {
+    try {
+      const stat = await this.stat(path)
+      return stat.isDirectory
+    } catch {
+      return false
+    }
+  }
+
+  watch(path: string, callback: (event: FileWatchEvent) => void): FileWatcher {
+    const watcher = watch(path, { recursive: true }, (eventType, filename) => {
+      if (!filename) return
+      
+      const fullPath = join(path, filename)
+      let type: FileWatchEvent["type"] = "modify"
+      
+      if (eventType === "rename") {
+        // Could be create or delete - we'd need to check existence
+        type = "rename"
+      }
+      
+      callback({ type, path: fullPath })
+    })
+
+    return {
+      close: () => watcher.close(),
+    }
+  }
+
+  async stat(path: string): Promise<FileStat> {
+    const file = Bun.file(path)
+    
+    // Bun.file doesn't expose isDirectory directly, so we use a workaround
+    // Try to read the file - if it fails with EISDIR, it's a directory
+    try {
+      const exists = await file.exists()
+      if (!exists) {
+        throw new Error(`ENOENT: ${path}`)
+      }
+      
+      // Check if directory by trying to list it
+      const proc = Bun.spawn(["test", "-d", path])
+      const exitCode = await proc.exited
+      const isDir = exitCode === 0
+      
+      return {
+        size: isDir ? 0 : file.size,
+        modifiedAt: new Date(file.lastModified),
+        createdAt: new Date(file.lastModified), // Bun doesn't expose createdAt
+        isDirectory: isDir,
+        isFile: !isDir,
+      }
+    } catch (e) {
+      throw e
+    }
+  }
+
+  async mkdir(path: string): Promise<void> {
+    const proc = Bun.spawn(["mkdir", "-p", path])
+    await proc.exited
+  }
+
+  async remove(path: string): Promise<void> {
+    const proc = Bun.spawn(["rm", "-rf", path])
+    await proc.exited
+  }
+
+  async rename(oldPath: string, newPath: string): Promise<void> {
+    const proc = Bun.spawn(["mv", oldPath, newPath])
+    await proc.exited
+  }
+}
+
+export const fileSystem = new BunFileSystemAdapter()
