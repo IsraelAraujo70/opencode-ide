@@ -168,9 +168,23 @@ export function App() {
           width={Math.min(60, width - 4)}
           height={Math.min(20, height - 4)}
           initialPath={state.workspace.rootPath || process.cwd()}
-          onSelect={(path: string) => {
+          mode={state.filePicker.mode}
+          onSelect={async (path: string) => {
             dispatch({ type: "CLOSE_FILE_PICKER" })
-            void commandRegistry.execute("file.open", { args: [path] })
+            if (state.filePicker.mode === "project") {
+              // Close all tabs and switch workspace
+              dispatch({ type: "CLOSE_ALL_TABS" })
+              dispatch({ type: "SET_WORKSPACE", path })
+              // Reload directory tree
+              try {
+                const tree = await fileSystem.buildTree(path, 2)
+                dispatch({ type: "SET_DIRECTORY_TREE", tree })
+              } catch (error) {
+                console.error("Failed to load workspace:", error)
+              }
+            } else {
+              void commandRegistry.execute("file.open", { args: [path] })
+            }
           }}
           onCancel={() => dispatch({ type: "CLOSE_FILE_PICKER" })}
         />

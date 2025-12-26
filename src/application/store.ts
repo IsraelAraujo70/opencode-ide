@@ -58,6 +58,7 @@ export const createInitialState = (): AppState => ({
   },
   filePicker: {
     isOpen: false,
+    mode: "file",
   },
   themePicker: {
     isOpen: false,
@@ -503,6 +504,25 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       }
     }
 
+    case "CLOSE_ALL_TABS": {
+      const pane = getActivePane(state.layout)
+      if (!pane) return state
+
+      const newLayout: PaneLayout = {
+        root: updatePaneInLayout(state.layout.root, pane.id, p => ({
+          ...p,
+          tabs: [],
+          activeTabId: null,
+        })),
+      }
+
+      return {
+        ...state,
+        buffers: new Map(),
+        layout: newLayout,
+      }
+    }
+
     case "SET_DIRECTORY_TREE": {
       return {
         ...state,
@@ -575,14 +595,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "OPEN_FILE_PICKER": {
       return {
         ...state,
-        filePicker: { isOpen: true },
+        filePicker: { isOpen: true, mode: action.mode ?? "file" },
       }
     }
 
     case "CLOSE_FILE_PICKER": {
       return {
         ...state,
-        filePicker: { isOpen: false },
+        filePicker: { isOpen: false, mode: "file" },
         focusTarget: "editor",
       }
     }

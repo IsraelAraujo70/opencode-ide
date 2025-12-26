@@ -214,6 +214,7 @@ export interface AppState {
   }
   filePicker: {
     isOpen: boolean
+    mode: "file" | "project"
   }
   themePicker: {
     isOpen: boolean
@@ -288,8 +289,11 @@ export type AppAction =
   | { type: "SET_EXPLORER_WIDTH"; width: number }
 
   // File Picker
-  | { type: "OPEN_FILE_PICKER" }
+  | { type: "OPEN_FILE_PICKER"; mode?: "file" | "project" }
   | { type: "CLOSE_FILE_PICKER" }
+
+  // Project/Workspace
+  | { type: "CLOSE_ALL_TABS" }
 
   // Theme Picker
   | { type: "OPEN_THEME_PICKER" }

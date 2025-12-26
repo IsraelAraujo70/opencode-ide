@@ -1,5 +1,5 @@
 /**
- * FilePicker Component - File browser dialog for opening files
+ * FilePicker Component - File browser dialog for opening files or projects
  */
 
 import { useState, useMemo, useEffect } from "react"
@@ -12,6 +12,7 @@ interface FilePickerProps {
   width: number
   height: number
   initialPath: string
+  mode?: "file" | "project"
   onSelect: (path: string) => void
   onCancel: () => void
 }
@@ -21,6 +22,7 @@ export function FilePicker({
   width,
   height,
   initialPath,
+  mode = "file",
   onSelect,
   onCancel,
 }: FilePickerProps) {
@@ -31,14 +33,18 @@ export function FilePicker({
   const [filter, setFilter] = useState("")
   const [loading, setLoading] = useState(true)
 
+  const isProjectMode = mode === "project"
+
   // Load directory contents
   useEffect(() => {
     setLoading(true)
     fileSystem
       .listDirectory(currentPath)
       .then(items => {
+        // In project mode, only show directories
+        const filtered = isProjectMode ? items.filter(i => i.type === "directory") : items
         // Sort: directories first, then files, alphabetically
-        const sorted = items.sort((a, b) => {
+        const sorted = filtered.sort((a, b) => {
           if (a.type === b.type) return a.name.localeCompare(b.name)
           return a.type === "directory" ? -1 : 1
         })
@@ -50,7 +56,7 @@ export function FilePicker({
         setEntries([])
         setLoading(false)
       })
-  }, [currentPath])
+  }, [currentPath, isProjectMode])
 
   // Filter entries
   const filteredEntries = useMemo(() => {
@@ -63,12 +69,20 @@ export function FilePicker({
     if (key.name === "escape") {
       onCancel()
     } else if (key.name === "return" || key.name === "enter") {
+      // Shift+Enter in project mode: select current directory as project
+      if (isProjectMode && key.shift) {
+        onSelect(currentPath)
+        return
+      }
+
       const selected = filteredEntries[selectedIndex]
       if (selected) {
         if (selected.type === "directory") {
+          // In both modes, Enter navigates into directory
           setCurrentPath(selected.path)
           setFilter("")
         } else {
+          // Only in file mode: select the file
           onSelect(selected.path)
         }
       }
@@ -103,7 +117,7 @@ export function FilePicker({
     >
       {/* Header with path */}
       <box height={1} paddingLeft={1} paddingRight={1}>
-        <text fg={colors.primary}>Open File</text>
+        <text fg={colors.primary}>{isProjectMode ? "Open Project" : "Open File"}</text>
       </box>
 
       {/* Current path */}
@@ -143,7 +157,7 @@ export function FilePicker({
           </text>
         ) : filteredEntries.length === 0 ? (
           <text fg={colors.comment} paddingLeft={1}>
-            No files found
+            {isProjectMode ? "No folders found" : "No files found"}
           </text>
         ) : (
           filteredEntries.slice(0, height - 6).map((entry, index) => (
@@ -167,7 +181,11 @@ export function FilePicker({
 
       {/* Help */}
       <box height={1} paddingLeft={1}>
-        <text fg={colors.comment}>Enter: select | Backspace: parent | Esc: cancel</text>
+        <text fg={colors.comment}>
+          {isProjectMode
+            ? "Enter: navigate | Shift+Enter: select project | Backspace: parent | Esc: cancel"
+            : "Enter: select | Backspace: parent | Esc: cancel"}
+        </text>
       </box>
     </box>
   )

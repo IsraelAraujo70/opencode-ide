@@ -22,6 +22,7 @@ const defaultKeybindings: KeybindingConfig[] = [
   { key: "s", ctrl: true, command: "file.save" },
   { key: "n", ctrl: true, command: "file.new" },
   { key: "o", ctrl: true, command: "filePicker.open" },
+  { key: "o", ctrl: true, shift: true, command: "project.open" },
   { key: "w", ctrl: true, command: "tab.close" },
 
   // Navigation

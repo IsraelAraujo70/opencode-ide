@@ -82,6 +82,10 @@ class CommandRegistry {
 
       // OpenCode integration
       opencode: "opencode.open",
+
+      // Project
+      project: "project.open",
+      cd: "project.open",
     }
 
     const commandId = aliasMap[commandName]
@@ -370,6 +374,17 @@ commandRegistry.register({
   category: "UI",
   execute: () => {
     store.dispatch({ type: "CLOSE_FILE_PICKER" })
+  },
+})
+
+// Project Picker
+commandRegistry.register({
+  id: "project.open",
+  name: "Open Project",
+  category: "File",
+  description: "Open a project folder",
+  execute: () => {
+    store.dispatch({ type: "OPEN_FILE_PICKER", mode: "project" })
   },
 })
 
