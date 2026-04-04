@@ -1122,13 +1122,16 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused }: E
     )
   }
 
+  const lineCount = buffer.content.split("\n").length
+  const gutterMinWidth = Math.max(4, Math.floor(Math.log10(Math.max(1, lineCount))) + 1 + 2)
+
   return (
     <box width={width} height={height} flexDirection="row" onMouseDown={handleEditorMouseDown}>
       <line-number
         flexGrow={1}
         fg={colors.comment}
         bg={colors.background}
-        minWidth={4}
+        minWidth={gutterMinWidth}
         paddingRight={1}
       >
         <textarea
