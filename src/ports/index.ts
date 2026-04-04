@@ -14,6 +14,11 @@ import type {
   HoverInfo,
   CursorPosition,
   Keybinding,
+  SearchMatch,
+  ProjectSearchResult,
+  GitState,
+  GitFileChange,
+  GitLogEntry,
 } from "../domain/types.ts"
 
 // ============================================================================
@@ -240,6 +245,11 @@ export interface LspClient {
   hover(uri: string, position: CursorPosition): Promise<HoverInfo | null>
 
   /**
+   * Get definition location at position
+   */
+  definition(uri: string, position: CursorPosition): Promise<{ uri: string; range: { start: CursorPosition; end: CursorPosition } } | null>
+
+  /**
    * Get diagnostics for document
    */
   getDiagnostics(uri: string): Diagnostic[]
@@ -295,6 +305,45 @@ export interface Settings {
   keybindings: Keybinding[]
   recentWorkspaces: string[]
   lspServers: Record<string, LspServerConfig>
+}
+
+// ============================================================================
+// SearchPort
+// ============================================================================
+
+export interface SearchOptions {
+  isRegex: boolean
+  isCaseSensitive: boolean
+  isWholeWord: boolean
+}
+
+export interface SearchPort {
+  searchInFile(content: string, query: string, options: SearchOptions): SearchMatch[]
+  searchInProject(
+    rootPath: string,
+    query: string,
+    options: SearchOptions
+  ): Promise<ProjectSearchResult[]>
+}
+
+// ============================================================================
+// GitPort
+// ============================================================================
+
+export interface GitPort {
+  isRepo(path: string): Promise<boolean>
+  status(path: string): Promise<GitState>
+  diff(path: string, file?: string): Promise<string>
+  diffStaged(path: string, file?: string): Promise<string>
+  log(path: string, limit?: number): Promise<GitLogEntry[]>
+  stage(path: string, files: string[]): Promise<void>
+  unstage(path: string, files: string[]): Promise<void>
+  commit(path: string, message: string): Promise<void>
+  push(path: string): Promise<void>
+  pull(path: string): Promise<void>
+  showFile(path: string, file: string, ref?: string): Promise<string>
+  blame(path: string, file: string): Promise<import("../domain/types.ts").GitBlameLine[]>
+  logGraph(path: string, limit?: number): Promise<string>
 }
 
 export const defaultSettings: Settings = {

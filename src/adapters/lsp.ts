@@ -236,6 +236,49 @@ export class StdioLspClient implements LspClient {
     return normalizeHoverResult(result)
   }
 
+  async definition(uri: string, position: CursorPosition): Promise<{ uri: string; range: { start: CursorPosition; end: CursorPosition } } | null> {
+    try {
+      const result = await this.sendRequest<unknown>(
+        "textDocument/definition",
+        {
+          textDocument: { uri },
+          position: {
+            line: position.line,
+            character: position.column,
+          },
+        },
+        5000
+      )
+
+      if (!result) return null
+
+      // Handle Location or Location[]
+      const location = Array.isArray(result) ? result[0] : result
+      if (!location || typeof location !== "object") return null
+
+      const loc = location as { uri?: string; range?: { start?: { line?: number; character?: number }; end?: { line?: number; character?: number } } }
+      if (!loc.uri || !loc.range?.start) return null
+
+      return {
+        uri: loc.uri,
+        range: {
+          start: {
+            line: loc.range.start.line ?? 0,
+            column: loc.range.start.character ?? 0,
+            offset: 0,
+          },
+          end: {
+            line: loc.range.end?.line ?? 0,
+            column: loc.range.end?.character ?? 0,
+            offset: 0,
+          },
+        },
+      }
+    } catch {
+      return null
+    }
+  }
+
   getDiagnostics(_uri: string): Diagnostic[] {
     // Diagnostics are delivered via publishDiagnostics notifications.
     return []

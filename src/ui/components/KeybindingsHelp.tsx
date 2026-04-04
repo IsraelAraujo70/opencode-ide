@@ -18,13 +18,33 @@ interface ShortcutItem {
 }
 
 const shortcutItems: ShortcutItem[] = [
+  // Search
+  { keys: "Ctrl+F", action: "Search in file" },
+  { keys: "Ctrl+Shift+F", action: "Search in project (grep)" },
+  { keys: "Ctrl+H", action: "Search and replace" },
+  // Files
   { keys: "Ctrl+P", action: "Search project files" },
-  { keys: "Ctrl+Shift+K", action: "Open command palette" },
-  { keys: "Ctrl+B", action: "Toggle file tree" },
   { keys: "Ctrl+S", action: "Save current file" },
   { keys: "Ctrl+N", action: "New file" },
   { keys: "Ctrl+O", action: "Open file picker" },
+  // Navigation
+  { keys: "Ctrl+Shift+K", action: "Open command palette" },
+  { keys: "Ctrl+B", action: "Toggle file tree" },
+  { keys: "Ctrl+Shift+E", action: "Focus explorer" },
   { keys: "Ctrl+Shift+M", action: "Open project picker" },
+  { keys: "Ctrl+Tab", action: "Next tab" },
+  { keys: "Ctrl+Shift+Tab", action: "Previous tab" },
+  // Git
+  { keys: "Ctrl+Shift+G", action: "Toggle git panel" },
+  { keys: "s (git)", action: "Stage file" },
+  { keys: "u (git)", action: "Unstage file" },
+  { keys: "S (git)", action: "Stage all" },
+  { keys: "c (git)", action: "Focus commit input" },
+  { keys: "d (git)", action: "Show file diff" },
+  { keys: "p (git)", action: "Push" },
+  { keys: "P (git)", action: "Pull" },
+  { keys: "1/2/3 (git)", action: "Switch tab: Status/Log/Diff" },
+  // Editor modes
   { keys: "Esc", action: "INSERT -> NORMAL / close overlays" },
   { keys: "i / Insert / Enter", action: "NORMAL -> INSERT" },
   { keys: ":", action: "Open command line (NORMAL mode)" },
@@ -33,6 +53,16 @@ const shortcutItems: ShortcutItem[] = [
   { keys: "Ctrl+C / Ctrl+X", action: "Copy / Cut selection" },
   { keys: "Ctrl+V", action: "Paste clipboard" },
   { keys: "Ctrl+Z / Ctrl+Shift+Z", action: "Undo / Redo" },
+  // Explorer
+  { keys: "a (explorer)", action: "Create new file/folder" },
+  { keys: "r (explorer)", action: "Rename file/folder" },
+  { keys: "d (explorer)", action: "Delete file/folder" },
+  // Commands
+  { keys: ":blame", action: "Show git blame for file" },
+  { keys: ":log", action: "Show git log with graph" },
+  { keys: ":diff", action: "Show git diff" },
+  // Terminal
+  { keys: "Ctrl+`", action: "Open terminal" },
 ]
 
 export function KeybindingsHelp({ theme, width, height, onClose }: KeybindingsHelpProps) {

@@ -41,6 +41,8 @@ interface EditorProps {
   width: number
   height: number
   focused: boolean
+  searchMatches?: import("../../domain/types.ts").SearchMatch[]
+  currentMatchIndex?: number
 }
 
 // Use a numeric ID for Tree-sitter buffers
@@ -48,6 +50,7 @@ let nextBufferId = 1
 const bufferIdMap = new Map<string, number>()
 const TREE_SITTER_HL_REF = 1001
 const DIAGNOSTIC_HL_REF = 2001
+const SEARCH_HL_REF = 3001
 const DIAGNOSTIC_HOVER_DELAY_MS = 180
 
 function getNumericBufferId(bufferId: string): number {
@@ -361,7 +364,7 @@ function DiagnosticHover({
   )
 }
 
-export function Editor({ buffer, diagnostics, theme, width, height, focused }: EditorProps) {
+export function Editor({ buffer, diagnostics, theme, width, height, focused, searchMatches, currentMatchIndex }: EditorProps) {
   const { colors } = theme
   const { width: terminalWidth, height: terminalHeight } = useTerminalDimensions()
   const textareaRef = useRef<TextareaRenderable | null>(null)
@@ -1095,6 +1098,33 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused }: E
       })
   }, [treeSitterReady, buffer?.id, buffer?.content])
 
+  // Apply search match highlights
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    textarea.removeHighlightsByRef(SEARCH_HL_REF)
+
+    if (!searchMatches || searchMatches.length === 0) return
+
+    const syntaxStyle = getSyntaxStyle(theme)
+    const matchStyleId = syntaxStyle.resolveStyleId("search.match")
+    const currentStyleId = syntaxStyle.resolveStyleId("search.current")
+    if (matchStyleId === null) return
+
+    for (let i = 0; i < searchMatches.length; i++) {
+      const match = searchMatches[i]!
+      const isCurrentMatch = i === (currentMatchIndex ?? -1)
+      textarea.addHighlight(match.line, {
+        start: match.column,
+        end: match.column + match.length,
+        styleId: isCurrentMatch && currentStyleId !== null ? currentStyleId : matchStyleId,
+        priority: 2000,
+        hlRef: SEARCH_HL_REF,
+      })
+    }
+  }, [searchMatches, currentMatchIndex, theme])
+
   if (!buffer) {
     return (
       <box
@@ -1109,14 +1139,16 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused }: E
             <b>Open IDE</b>
           </text>
           <text fg={colors.comment}> </text>
-          <text fg={colors.comment}>Press Ctrl+O to open a file</text>
-          <text fg={colors.comment}>Press Ctrl+N to create a new file</text>
-          <text fg={colors.comment}>Press Ctrl+P to search files</text>
-          <text fg={colors.comment}>Press Ctrl+Shift+K for command palette</text>
-          <text fg={colors.comment}>Type :w to save and :q to quit</text>
-          <text fg={colors.comment}>Esc: NORMAL | Insert/Enter: INSERT</text>
-          <text fg={colors.comment}>Tab/Shift+Tab: indent | Ctrl+Z / Ctrl+Shift+Z</text>
-          <text fg={colors.comment}>Right click: context menu</text>
+          <text fg={colors.comment}>Ctrl+O   Open a file</text>
+          <text fg={colors.comment}>Ctrl+N   Create a new file</text>
+          <text fg={colors.comment}>Ctrl+P   Search project files</text>
+          <text fg={colors.comment}>Ctrl+F   Search in file</text>
+          <text fg={colors.comment}>Ctrl+Shift+F  Search in project</text>
+          <text fg={colors.comment}>Ctrl+Shift+G  Git panel</text>
+          <text fg={colors.comment}>Ctrl+Shift+K  Command palette</text>
+          <text fg={colors.comment}>:w save  :q quit  gd go-to-definition</text>
+          <text fg={colors.comment}>Esc: NORMAL | i/Enter: INSERT</text>
+          <text fg={colors.comment}>Explorer: a=new r=rename d=delete</text>
         </box>
       </box>
     )
