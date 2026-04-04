@@ -1241,14 +1241,14 @@ export function Editor({
             <b>Open IDE</b>
           </text>
           <text fg={colors.comment}> </text>
-          <text fg={colors.comment}>Ctrl+O Open a file</text>
-          <text fg={colors.comment}>Ctrl+N Create a new file</text>
-          <text fg={colors.comment}>Ctrl+P Search project files</text>
-          <text fg={colors.comment}>Ctrl+F Search in file</text>
-          <text fg={colors.comment}>Ctrl+Shift+F Search in project</text>
-          <text fg={colors.comment}>Ctrl+Shift+G Git panel</text>
-          <text fg={colors.comment}>Ctrl+Shift+K Command palette</text>
-          <text fg={colors.comment}>:w save :q quit gd go-to-definition</text>
+          <text fg={colors.comment}>Ctrl+O   Open a file</text>
+          <text fg={colors.comment}>Ctrl+N   Create a new file</text>
+          <text fg={colors.comment}>Ctrl+P   Search project files</text>
+          <text fg={colors.comment}>Ctrl+F   Search in file</text>
+          <text fg={colors.comment}>Ctrl+Shift+F  Search in project</text>
+          <text fg={colors.comment}>Ctrl+Shift+G  Git panel</text>
+          <text fg={colors.comment}>Ctrl+Shift+K  Command palette</text>
+          <text fg={colors.comment}>:w save  :q quit  gd go-to-definition</text>
           <text fg={colors.comment}>Esc: NORMAL | i/Enter: INSERT</text>
           <text fg={colors.comment}>Explorer: a=new r=rename d=delete</text>
         </box>

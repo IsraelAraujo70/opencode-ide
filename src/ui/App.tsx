@@ -150,6 +150,7 @@ export function App() {
     wasDirtyRef.current = activeBuffer.isDirty
   }, [activeBuffer?.isDirty, activeBuffer?.filePath, state.workspace.rootPath])
 
+
   // Full-screen Diffview mode
   if (state.diffview.isOpen) {
     return (
