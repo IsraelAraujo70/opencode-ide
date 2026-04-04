@@ -2,7 +2,7 @@
  * Main App Component - Root layout for Open IDE
  */
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useTerminalDimensions } from "@opentui/react"
 import { useStore } from "./hooks/useStore.ts"
 import { StatusBar } from "./components/StatusBar"
@@ -19,7 +19,7 @@ import { SearchBar } from "./components/SearchBar"
 import { SearchPanel } from "./components/SearchPanel"
 import { useKeybindings } from "./hooks/useKeybindings.ts"
 import { commandRegistry, parseAndExecuteCommand } from "../application/commands.ts"
-import { fileSystem } from "../adapters/index.ts"
+import { fileSystem, git } from "../adapters/index.ts"
 import { setTreeSitterWorkspaceRoot } from "../shared/index.ts"
 import { initializeLspRuntime, shutdownLspRuntime } from "../application/lsp-runtime.ts"
 import { initializeGitRuntime, shutdownGitRuntime } from "../application/git-runtime.ts"
@@ -99,6 +99,56 @@ export function App() {
   const activeTab = activePane?.tabs.find(t => t.isActive)
   const activeBuffer = activeTab ? (state.buffers.get(activeTab.bufferId) ?? null) : null
   const activeDiagnostics = activeBuffer ? (state.diagnostics.get(activeBuffer.id) ?? []) : []
+
+  // Auto-fetch git blame for active buffer
+  const lastBlameFileRef = useRef<string | null>(null)
+  useEffect(() => {
+    const filePath = activeBuffer?.filePath
+    const rootPath = state.workspace.rootPath
+    if (!filePath || !rootPath || !state.git.isRepo) {
+      if (lastBlameFileRef.current !== null) {
+        dispatch({ type: "SET_GIT_BLAME_LINES", lines: [] })
+        lastBlameFileRef.current = null
+      }
+      return
+    }
+
+    if (lastBlameFileRef.current === filePath) return
+    lastBlameFileRef.current = filePath
+
+    const relativePath = filePath.startsWith(rootPath)
+      ? filePath.slice(rootPath.length + 1)
+      : filePath
+
+    git.blame(rootPath, relativePath)
+      .then(lines => {
+        if (lastBlameFileRef.current === filePath) {
+          dispatch({ type: "SET_GIT_BLAME_LINES", lines })
+        }
+      })
+      .catch(() => {
+        dispatch({ type: "SET_GIT_BLAME_LINES", lines: [] })
+      })
+  }, [activeBuffer?.filePath, state.workspace.rootPath, state.git.isRepo])
+
+  // Refetch blame after save
+  const wasDirtyRef = useRef(false)
+  useEffect(() => {
+    if (!activeBuffer) return
+    if (wasDirtyRef.current && !activeBuffer.isDirty) {
+      const filePath = activeBuffer.filePath
+      const rootPath = state.workspace.rootPath
+      if (filePath && rootPath) {
+        const relativePath = filePath.startsWith(rootPath)
+          ? filePath.slice(rootPath.length + 1)
+          : filePath
+        git.blame(rootPath, relativePath)
+          .then(lines => dispatch({ type: "SET_GIT_BLAME_LINES", lines }))
+          .catch(() => {})
+      }
+    }
+    wasDirtyRef.current = activeBuffer.isDirty
+  }, [activeBuffer?.isDirty, activeBuffer?.filePath, state.workspace.rootPath])
 
   // Full-screen Diffview mode
   if (state.diffview.isOpen) {
@@ -183,6 +233,7 @@ export function App() {
             focused={state.focusTarget === "editor"}
             searchMatches={state.search.matches}
             currentMatchIndex={state.search.currentMatchIndex}
+            blameLines={state.gitPanel.blameLines}
           />
 
           {/* Project Search Results Panel */}

@@ -13,12 +13,20 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react"
 import { useTerminalDimensions } from "@opentui/react"
 import type { KeyEvent, MouseEvent as OtuMouseEvent, TextareaRenderable } from "@opentui/core"
-import type { BufferState, CursorPosition, Selection, Theme, Diagnostic } from "../../domain/types.ts"
+import type {
+  BufferState,
+  CursorPosition,
+  Selection,
+  Theme,
+  Diagnostic,
+  GitBlameLine,
+} from "../../domain/types.ts"
 import { getTreeSitter, initTreeSitter, getFiletype } from "../../shared/index.ts"
 import { getSyntaxStyle } from "../../shared/syntaxStyle.ts"
 import { store } from "../../application/store.ts"
 import { clipboard } from "../../adapters/index.ts"
 import { commandRegistry } from "../../application/commands.ts"
+import { formatRelativeTime } from "../../adapters/git.ts"
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu.tsx"
 
 // Re-define the highlight types locally to avoid module resolution issues
@@ -43,6 +51,7 @@ interface EditorProps {
   focused: boolean
   searchMatches?: import("../../domain/types.ts").SearchMatch[]
   currentMatchIndex?: number
+  blameLines?: GitBlameLine[]
 }
 
 // Use a numeric ID for Tree-sitter buffers
@@ -155,7 +164,11 @@ function isCursorInsideDiagnostic(diagnostic: Diagnostic, position: CursorPositi
     if (end.column <= start.column) {
       return position.line === start.line && position.column === start.column
     }
-    return position.line === start.line && position.column >= start.column && position.column <= end.column
+    return (
+      position.line === start.line &&
+      position.column >= start.column &&
+      position.column <= end.column
+    )
   }
 
   if (position.line === start.line) {
@@ -334,7 +347,10 @@ function DiagnosticHover({
 
   const preferredTop = cursor.line + 1
   const maxTop = Math.max(0, viewportHeight - popupHeight)
-  const top = preferredTop + popupHeight <= viewportHeight ? preferredTop : clamp(cursor.line - popupHeight, 0, maxTop)
+  const top =
+    preferredTop + popupHeight <= viewportHeight
+      ? preferredTop
+      : clamp(cursor.line - popupHeight, 0, maxTop)
 
   return (
     <box
@@ -364,7 +380,17 @@ function DiagnosticHover({
   )
 }
 
-export function Editor({ buffer, diagnostics, theme, width, height, focused, searchMatches, currentMatchIndex }: EditorProps) {
+export function Editor({
+  buffer,
+  diagnostics,
+  theme,
+  width,
+  height,
+  focused,
+  searchMatches,
+  currentMatchIndex,
+  blameLines,
+}: EditorProps) {
   const { colors } = theme
   const { width: terminalWidth, height: terminalHeight } = useTerminalDimensions()
   const textareaRef = useRef<TextareaRenderable | null>(null)
@@ -386,6 +412,8 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
     cursor: CursorPosition
   } | null>(null)
   const versionRef = useRef(0)
+  const [blameText, setBlameText] = useState<string | null>(null)
+  const [blameLine, setBlameLine] = useState<number>(-1)
 
   // Initialize Tree-sitter on mount
   useEffect(() => {
@@ -525,6 +553,43 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
     hoverCursorPosition?.offset,
   ])
 
+  // Inline git blame annotation for the current cursor line.
+  const blameLinesRef = useRef<GitBlameLine[] | undefined>(blameLines)
+  blameLinesRef.current = blameLines
+
+  const syncBlameAnnotation = useCallback(() => {
+    const textarea = textareaRef.current
+    const lines = blameLinesRef.current
+    const cursorLine = textarea?.logicalCursor.row ?? -1
+
+    if (!textarea || !buffer || !lines || lines.length === 0 || cursorLine < 0) {
+      setBlameText(null)
+      setBlameLine(-1)
+      return
+    }
+
+    const blame = lines.find(b => b.lineNumber === cursorLine + 1)
+    if (!blame || blame.hash === "00000000") {
+      setBlameText(null)
+      setBlameLine(-1)
+      return
+    }
+    const relTime = formatRelativeTime(blame.date)
+    setBlameText(`${blame.author}, ${relTime}`)
+    setBlameLine(cursorLine)
+  }, [buffer])
+
+  // Keep inline blame tied to the app cursor state.
+  useEffect(() => {
+    syncBlameAnnotation()
+  }, [buffer?.id, buffer?.cursorPosition.line, blameLines, syncBlameAnnotation])
+
+  // Clear blame when switching buffers
+  useEffect(() => {
+    setBlameText(null)
+    setBlameLine(-1)
+  }, [buffer?.id])
+
   // Keep the textarea instance stable and only reset content when switching buffers.
   useEffect(() => {
     const textarea = textareaRef.current
@@ -549,6 +614,20 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
       activeBufferIdRef.current = buffer.id
     }
   }, [buffer])
+
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea || !buffer) {
+      return
+    }
+
+    const maxOffset = textarea.plainText.length
+    const nextOffset = Math.max(0, Math.min(maxOffset, buffer.cursorPosition.offset))
+
+    if (textarea.logicalCursor.offset !== nextOffset) {
+      textarea.cursorOffset = nextOffset
+    }
+  }, [buffer?.id, buffer?.cursorPosition.offset])
 
   const syncBufferState = useCallback(() => {
     if (!buffer || !textareaRef.current) return
@@ -587,7 +666,9 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
         selection: nextSelection,
       })
     }
-  }, [buffer])
+
+    syncBlameAnnotation()
+  }, [buffer, syncBlameAnnotation])
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null)
@@ -717,8 +798,12 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
       if (contextMenu) {
         closeContextMenu()
       }
+
+      setTimeout(() => {
+        syncBufferState()
+      }, 0)
     },
-    [closeContextMenu, contextMenu]
+    [closeContextMenu, contextMenu, syncBufferState]
   )
 
   const handleEditorMouseMove = useCallback(
@@ -819,7 +904,17 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
         return
       }
 
-      if (state.editorMode !== "insert") return
+      if (state.editorMode !== "insert") {
+        if (
+          !hasHardModifier &&
+          ["left", "right", "up", "down", "home", "end", "pageup", "pagedown"].includes(keyName)
+        ) {
+          setTimeout(() => {
+            syncBufferState()
+          }, 0)
+        }
+        return
+      }
 
       if (keyName === "tab" && !hasHardModifier) {
         event.preventDefault?.()
@@ -880,7 +975,14 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
         return
       }
     },
-    [closeContextMenu, contextMenu, copySelection, cutSelection, pasteFromClipboard, syncBufferState]
+    [
+      closeContextMenu,
+      contextMenu,
+      copySelection,
+      cutSelection,
+      pasteFromClipboard,
+      syncBufferState,
+    ]
   )
 
   const clearSyntaxHighlights = useCallback(() => {
@@ -1139,14 +1241,14 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
             <b>Open IDE</b>
           </text>
           <text fg={colors.comment}> </text>
-          <text fg={colors.comment}>Ctrl+O   Open a file</text>
-          <text fg={colors.comment}>Ctrl+N   Create a new file</text>
-          <text fg={colors.comment}>Ctrl+P   Search project files</text>
-          <text fg={colors.comment}>Ctrl+F   Search in file</text>
-          <text fg={colors.comment}>Ctrl+Shift+F  Search in project</text>
-          <text fg={colors.comment}>Ctrl+Shift+G  Git panel</text>
-          <text fg={colors.comment}>Ctrl+Shift+K  Command palette</text>
-          <text fg={colors.comment}>:w save  :q quit  gd go-to-definition</text>
+          <text fg={colors.comment}>Ctrl+O Open a file</text>
+          <text fg={colors.comment}>Ctrl+N Create a new file</text>
+          <text fg={colors.comment}>Ctrl+P Search project files</text>
+          <text fg={colors.comment}>Ctrl+F Search in file</text>
+          <text fg={colors.comment}>Ctrl+Shift+F Search in project</text>
+          <text fg={colors.comment}>Ctrl+Shift+G Git panel</text>
+          <text fg={colors.comment}>Ctrl+Shift+K Command palette</text>
+          <text fg={colors.comment}>:w save :q quit gd go-to-definition</text>
           <text fg={colors.comment}>Esc: NORMAL | i/Enter: INSERT</text>
           <text fg={colors.comment}>Explorer: a=new r=rename d=delete</text>
         </box>
@@ -1186,6 +1288,35 @@ export function Editor({ buffer, diagnostics, theme, width, height, focused, sea
           onMouseDown={handleEditorMouseDown}
         />
       </line-number>
+
+      {buffer &&
+        blameText !== null &&
+        blameLine >= 0 &&
+        (() => {
+          const lines = buffer.content.split("\n")
+          const lineContent = lines[blameLine] ?? ""
+          const viewport = textareaRef.current?.editorView.getViewport()
+          const viewportOffsetY = viewport?.offsetY ?? 0
+          const viewportOffsetX = viewport?.offsetX ?? 0
+          const visibleBlameLine = blameLine - viewportOffsetY
+
+          if (visibleBlameLine < 0 || visibleBlameLine >= height) {
+            return null
+          }
+
+          const gutterWidth = 6
+          const visibleLineContent = lineContent.slice(viewportOffsetX)
+          const leftPos = gutterWidth + visibleLineContent.length + 4
+          const available = width - leftPos
+          if (available < 10) return null
+          const displayText =
+            blameText.length > available ? blameText.slice(0, available - 1) + "…" : blameText
+          return (
+            <box position="absolute" top={visibleBlameLine} left={leftPos} height={1} zIndex={50}>
+              <text fg={colors.comment}>{displayText}</text>
+            </box>
+          )
+        })()}
 
       {buffer && activeDiagnostic && (
         <DiagnosticHover
