@@ -116,6 +116,9 @@ export const createInitialState = (): AppState => ({
     oldCode: "",
     newCode: "",
     language: null,
+    commitMessage: "",
+    focusArea: "fileList" as const,
+    fileStats: [],
   },
   completion: {
     isOpen: false,
@@ -959,6 +962,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           oldCode: action.oldCode,
           newCode: action.newCode,
           language: action.language,
+          commitMessage: "",
+          focusArea: "fileList" as const,
+          fileStats: [],
         },
       }
     }
@@ -966,7 +972,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "CLOSE_DIFFVIEW": {
       return {
         ...state,
-        diffview: { ...state.diffview, isOpen: false },
+        diffview: {
+          ...state.diffview,
+          isOpen: false,
+          commitMessage: "",
+        },
         focusTarget: "editor",
       }
     }
@@ -982,6 +992,27 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           newCode: action.newCode,
           language: action.language,
         },
+      }
+    }
+
+    case "SET_DIFFVIEW_COMMIT_MESSAGE": {
+      return {
+        ...state,
+        diffview: { ...state.diffview, commitMessage: action.message },
+      }
+    }
+
+    case "SET_DIFFVIEW_FOCUS_AREA": {
+      return {
+        ...state,
+        diffview: { ...state.diffview, focusArea: action.area },
+      }
+    }
+
+    case "SET_DIFFVIEW_FILE_STATS": {
+      return {
+        ...state,
+        diffview: { ...state.diffview, fileStats: action.stats },
       }
     }
 

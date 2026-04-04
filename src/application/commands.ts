@@ -876,16 +876,56 @@ commandRegistry.register({
   name: "Open Diffview",
   category: "Git",
   description: "Open full-screen diff viewer (like Neovim DiffviewOpen)",
-  execute: () => {
+  execute: async () => {
     const state = store.getState()
     if (!state.git.isRepo) return
-    // Open diffview — the component will load the first file
+    const rootPath = state.workspace.rootPath
+    if (!rootPath) return
+
+    const { git } = await import("../adapters/index.ts")
+
+    // Collect all changed files
+    const allFiles = [
+      ...state.git.staged.map(f => ({ path: f.path, status: f.status })),
+      ...state.git.unstaged.map(f => ({ path: f.path, status: f.status })),
+      ...state.git.untracked.map(p => ({ path: p, status: "untracked" })),
+    ]
+
+    // Pre-load first file diff
+    let firstFile = ""
+    let oldCode = ""
+    let newCode = ""
+    let language: string | null = null
+
+    if (allFiles.length > 0) {
+      const first = allFiles[0]!
+      firstFile = first.path
+      const ext = first.path.split(".").pop()?.toLowerCase() ?? ""
+      const langMap: Record<string, string> = {
+        ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+        py: "python", rs: "rust", go: "go", json: "json", md: "markdown",
+        html: "html", css: "css", sh: "bash",
+      }
+      language = langMap[ext] ?? null
+
+      try {
+        oldCode = await git.showFile(rootPath, first.path, "HEAD")
+      } catch { oldCode = "" }
+
+      if (first.status !== "deleted") {
+        const { fileSystem } = await import("../adapters/index.ts")
+        try {
+          newCode = await fileSystem.readFile(`${rootPath}/${first.path}`)
+        } catch { newCode = "" }
+      }
+    }
+
     store.dispatch({
       type: "OPEN_DIFFVIEW",
-      file: "",
-      oldCode: "",
-      newCode: "",
-      language: null,
+      file: firstFile,
+      oldCode,
+      newCode,
+      language,
     })
   },
 })

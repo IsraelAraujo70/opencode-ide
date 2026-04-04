@@ -205,6 +205,39 @@ export class BunGitAdapter implements GitPort {
     return lines
   }
 
+  async diffNumstat(path: string): Promise<Array<{ file: string; additions: number; deletions: number }>> {
+    const parse = (output: string) => {
+      const results: Array<{ file: string; additions: number; deletions: number }> = []
+      for (const line of output.split("\n")) {
+        if (!line) continue
+        const parts = line.split("\t")
+        if (parts.length < 3) continue
+        const additions = parseInt(parts[0] ?? "0", 10) || 0
+        const deletions = parseInt(parts[1] ?? "0", 10) || 0
+        const file = parts[2]!
+        results.push({ file, additions, deletions })
+      }
+      return results
+    }
+
+    const [working, staged] = await Promise.all([
+      this.run(["diff", "--numstat"], path).catch(() => ""),
+      this.run(["diff", "--staged", "--numstat"], path).catch(() => ""),
+    ])
+
+    const map = new Map<string, { file: string; additions: number; deletions: number }>()
+    for (const entry of [...parse(working), ...parse(staged)]) {
+      const existing = map.get(entry.file)
+      if (existing) {
+        existing.additions += entry.additions
+        existing.deletions += entry.deletions
+      } else {
+        map.set(entry.file, { ...entry })
+      }
+    }
+    return Array.from(map.values())
+  }
+
   async logGraph(path: string, limit = 30): Promise<string> {
     return this.run(
       [

@@ -259,6 +259,14 @@ export interface GitPanelState {
   blameLines: GitBlameLine[]
 }
 
+export type DiffviewFocusArea = "fileList" | "diff" | "commitInput"
+
+export interface DiffviewFileStats {
+  file: string
+  additions: number
+  deletions: number
+}
+
 export interface DiffviewState {
   isOpen: boolean
   selectedFile: string | null
@@ -266,6 +274,9 @@ export interface DiffviewState {
   oldCode: string
   newCode: string
   language: string | null
+  commitMessage: string
+  focusArea: DiffviewFocusArea
+  fileStats: DiffviewFileStats[]
 }
 
 export interface GitState {
@@ -475,6 +486,9 @@ export type AppAction =
   | { type: "OPEN_DIFFVIEW"; file: string; oldCode: string; newCode: string; language: string | null }
   | { type: "CLOSE_DIFFVIEW" }
   | { type: "SET_DIFFVIEW_FILE"; file: string; oldCode: string; newCode: string; language: string | null; index: number }
+  | { type: "SET_DIFFVIEW_COMMIT_MESSAGE"; message: string }
+  | { type: "SET_DIFFVIEW_FOCUS_AREA"; area: DiffviewFocusArea }
+  | { type: "SET_DIFFVIEW_FILE_STATS"; stats: DiffviewFileStats[] }
 
   // Completion
   | { type: "OPEN_COMPLETION"; items: CompletionItem[]; triggerPosition: CursorPosition }

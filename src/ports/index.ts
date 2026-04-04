@@ -344,6 +344,7 @@ export interface GitPort {
   showFile(path: string, file: string, ref?: string): Promise<string>
   blame(path: string, file: string): Promise<import("../domain/types.ts").GitBlameLine[]>
   logGraph(path: string, limit?: number): Promise<string>
+  diffNumstat(path: string): Promise<Array<{ file: string; additions: number; deletions: number }>>
 }
 
 export const defaultSettings: Settings = {
