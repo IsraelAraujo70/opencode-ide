@@ -11,8 +11,8 @@ export interface FileIconConfig {
 
 // Folder icons - using basic Unicode
 export const folderIcons = {
-  closed: "▶",
-  open: "▼",
+  closed: "▸",
+  open: "▾",
 }
 
 // Folder colors

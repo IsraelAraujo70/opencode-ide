@@ -22,7 +22,7 @@ describe("getFileIcon", () => {
 
 describe("getFolderIcon", () => {
   it("returns open and closed icons based on state", () => {
-    expect(getFolderIcon("src", true)).toBe("▼")
-    expect(getFolderIcon("src", false)).toBe("▶")
+    expect(getFolderIcon("src", true)).toBe("▾")
+    expect(getFolderIcon("src", false)).toBe("▸")
   })
 })
