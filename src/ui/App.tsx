@@ -75,7 +75,7 @@ export function App() {
 
   // Calculate layout dimensions
   const resizeHandleWidth = state.explorerVisible ? 2 : 0
-  const minExplorerWidth = 8
+  const minExplorerWidth = 20
   const editorMinWidth = 20
   const maxExplorerWidth = Math.max(minExplorerWidth, width - resizeHandleWidth - editorMinWidth)
   const explorerWidth = state.explorerVisible

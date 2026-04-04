@@ -49,7 +49,7 @@ export const createInitialState = (): AppState => ({
   },
   buffers: new Map(),
   layout: createInitialLayout(),
-  explorerWidth: 25,
+  explorerWidth: 30,
   explorerVisible: true,
   explorerTab: "file",
   theme: defaultTheme,
@@ -400,7 +400,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case "SET_EXPLORER_WIDTH": {
-      const minWidth = 8
+      const minWidth = 20
       const width = Math.max(minWidth, Math.floor(action.width))
       return { ...state, explorerWidth: width }
     }

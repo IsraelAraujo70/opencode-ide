@@ -17,7 +17,6 @@ import type {
   SearchMatch,
   ProjectSearchResult,
   GitState,
-  GitFileChange,
   GitLogEntry,
 } from "../domain/types.ts"
 
