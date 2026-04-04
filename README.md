@@ -6,7 +6,7 @@ Terminal IDE built with OpenTUI and Bun.
 
 ```bash
 bun install
-bun run index.tsx
+bun run dev
 ```
 
 ## Install from npm
