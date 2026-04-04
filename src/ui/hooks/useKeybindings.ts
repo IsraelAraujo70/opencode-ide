@@ -43,6 +43,14 @@ const defaultKeybindings: KeybindingConfig[] = [
   // Focus
   { key: "e", ctrl: true, shift: true, command: "focus.explorer" },
   { key: "`", ctrl: true, command: "terminal.open" },
+
+  // Search
+  { key: "f", ctrl: true, command: "search.openFile" },
+  { key: "f", ctrl: true, shift: true, command: "search.openProject" },
+  { key: "h", ctrl: true, command: "search.openReplace" },
+
+  // Git
+  { key: "g", ctrl: true, shift: true, command: "git.togglePanel" },
 ]
 
 const editorNavKeys = new Set(["left", "right", "up", "down", "home", "end", "pageup", "pagedown"])
@@ -68,6 +76,10 @@ function matchesBinding(event: KeyEvent, binding: KeybindingConfig): boolean {
     metaPressed === !!binding.meta
   )
 }
+
+// Track pending key for vim-style chord sequences (e.g., "gd")
+let pendingKey: string | null = null
+let pendingTimeout: ReturnType<typeof setTimeout> | null = null
 
 export function useKeybindings() {
   useKeyboard((event: KeyEvent) => {
@@ -95,6 +107,14 @@ export function useKeybindings() {
         commandRegistry.execute("keybindings.close")
         return
       }
+      if (state.search.isOpen) {
+        commandRegistry.execute("search.close")
+        return
+      }
+      if (state.gitPanel.isOpen && state.focusTarget === "gitPanel") {
+        store.dispatch({ type: "CLOSE_GIT_PANEL" })
+        return
+      }
 
       if (state.focusTarget === "editor" && state.editorMode === "insert") {
         event.preventDefault?.()
@@ -113,7 +133,9 @@ export function useKeybindings() {
       state.palette.isOpen ||
       state.filePicker.isOpen ||
       state.themePicker.isOpen ||
-      state.keybindingsHelp.isOpen
+      state.keybindingsHelp.isOpen ||
+      state.search.isOpen ||
+      (state.gitPanel.isOpen && state.focusTarget === "gitPanel")
 
     // Let active modal widgets handle their own key events.
     if (hasModalOpen) {
@@ -145,6 +167,25 @@ export function useKeybindings() {
         commandRegistry.execute("commandLine.open")
         return
       }
+
+      // Vim chord: g + d = go to definition
+      if (pendingKey === "g" && event.sequence === "d") {
+        event.preventDefault?.()
+        pendingKey = null
+        if (pendingTimeout) clearTimeout(pendingTimeout)
+        commandRegistry.execute("lsp.goToDefinition")
+        return
+      }
+
+      if (event.sequence === "g") {
+        event.preventDefault?.()
+        pendingKey = "g"
+        if (pendingTimeout) clearTimeout(pendingTimeout)
+        pendingTimeout = setTimeout(() => { pendingKey = null }, 500)
+        return
+      }
+
+      pendingKey = null
 
       // Block text editing keys in NORMAL mode, while preserving arrow navigation.
       const hasModifier = !!event.ctrl || !!event.meta || !!event.option || !!event.super

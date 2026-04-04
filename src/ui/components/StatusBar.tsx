@@ -2,7 +2,7 @@
  * StatusBar Component - Bottom status bar showing file info, cursor position, etc.
  */
 
-import type { Theme, BufferState, FocusTarget, EditorMode, Diagnostic } from "../../domain/types.ts"
+import type { Theme, BufferState, FocusTarget, EditorMode, Diagnostic, GitState } from "../../domain/types.ts"
 
 interface StatusBarProps {
   theme: Theme
@@ -11,6 +11,7 @@ interface StatusBarProps {
   diagnostics: Diagnostic[]
   focusTarget: FocusTarget
   editorMode: EditorMode
+  gitState?: GitState
 }
 
 export function StatusBar({
@@ -20,6 +21,7 @@ export function StatusBar({
   diagnostics,
   focusTarget,
   editorMode,
+  gitState,
 }: StatusBarProps) {
   const { colors } = theme
 
@@ -36,6 +38,16 @@ export function StatusBar({
   const diagnosticSummary = getDiagnosticSummary(diagnostics)
   const diagnosticBadges = buildDiagnosticBadges(theme, diagnosticSummary)
 
+  // Git info
+  let gitInfo = ""
+  if (gitState?.isRepo && gitState.branch) {
+    gitInfo = `  ${gitState.branch}`
+    if (gitState.ahead > 0) gitInfo += ` ↑${gitState.ahead}`
+    if (gitState.behind > 0) gitInfo += ` ↓${gitState.behind}`
+    const changes = gitState.staged.length + gitState.unstaged.length + gitState.untracked.length
+    if (changes > 0) gitInfo += ` ~${changes}`
+  }
+
   const rightContent = cursorInfo ? `${language} | ${cursorInfo} ` : `${language} `
   const badgesWidth = diagnosticBadges.reduce((total, badge) => total + badge.label.length, 0)
 
@@ -43,7 +55,7 @@ export function StatusBar({
   const leftMain = ` ${fileName}${modified}`
   const middleSpaces = Math.max(
     1,
-    width - modeTag.length - leftMain.length - badgesWidth - rightContent.length
+    width - modeTag.length - leftMain.length - gitInfo.length - badgesWidth - rightContent.length
   )
 
   return (
@@ -54,6 +66,11 @@ export function StatusBar({
       <text fg={colors.foreground} bg={colors.lineHighlight}>
         {leftMain}
       </text>
+      {gitInfo && (
+        <text fg={colors.accent} bg={colors.lineHighlight}>
+          {gitInfo}
+        </text>
+      )}
       <text fg={colors.foreground} bg={colors.lineHighlight}>
         {" ".repeat(middleSpaces)}
       </text>
@@ -141,6 +158,8 @@ function getModeLabel(focus: FocusTarget, editorMode: EditorMode): string {
       return "COMMAND"
     case "palette":
       return "PALETTE"
+    case "gitPanel":
+      return "GIT"
     default:
       return "NORMAL"
   }
@@ -162,6 +181,8 @@ function getModeColor(theme: Theme, focus: FocusTarget, editorMode: EditorMode):
       return colors.accent
     case "palette":
       return colors.secondary
+    case "gitPanel":
+      return colors.warning
     default:
       return colors.primary
   }

@@ -102,6 +102,10 @@ export function createSyntaxStyleFromTheme(theme: Theme): SyntaxStyle {
     "diagnostic.warning": { fg: parseColor(colors.warning), underline: true },
     "diagnostic.info": { fg: parseColor(colors.info), underline: true },
     "diagnostic.hint": { fg: parseColor(colors.accent), underline: true },
+
+    // Search highlights
+    "search.match": { bg: parseColor(colors.selection) },
+    "search.current": { fg: parseColor(colors.background), bg: parseColor(colors.warning) },
   })
 }
 

@@ -109,6 +109,20 @@ class CommandRegistry {
       find: "filePicker.open",
       fzf: "filePicker.open",
       telescope: "palette.open",
+      search: "search.openFile",
+      grep: "search.openProject",
+      rg: "search.openProject",
+      replace: "search.openReplace",
+      git: "git.togglePanel",
+      gd: "lsp.goToDefinition",
+      definition: "lsp.goToDefinition",
+      log: "git.showLog",
+      blame: "git.blame",
+      diff: "git.diff",
+      diffview: "git.diffview",
+      "DiffviewOpen": "git.diffview",
+      "DiffviewClose": "git.closeDiffview",
+      "stage-all": "git.stageAll",
     }
 
     const commandId = aliasMap[commandName]
@@ -580,6 +594,347 @@ commandRegistry.register({
         },
       },
     })
+  },
+})
+
+// Search Operations
+commandRegistry.register({
+  id: "search.openFile",
+  name: "Search in File",
+  category: "Search",
+  description: "Find text in current file (Ctrl+F)",
+  execute: () => {
+    store.dispatch({ type: "OPEN_SEARCH", mode: "file" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.openProject",
+  name: "Search in Project",
+  category: "Search",
+  description: "Search across all project files (Ctrl+Shift+F)",
+  execute: () => {
+    store.dispatch({ type: "OPEN_SEARCH", mode: "project" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.openReplace",
+  name: "Search and Replace",
+  category: "Search",
+  description: "Find and replace in current file (Ctrl+H)",
+  execute: () => {
+    store.dispatch({ type: "OPEN_SEARCH", mode: "file" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.close",
+  name: "Close Search",
+  category: "Search",
+  execute: () => {
+    store.dispatch({ type: "CLOSE_SEARCH" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.nextMatch",
+  name: "Next Match",
+  category: "Search",
+  execute: () => {
+    store.dispatch({ type: "NEXT_MATCH" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.prevMatch",
+  name: "Previous Match",
+  category: "Search",
+  execute: () => {
+    store.dispatch({ type: "PREV_MATCH" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.toggleRegex",
+  name: "Toggle Regex Search",
+  category: "Search",
+  execute: () => {
+    store.dispatch({ type: "TOGGLE_SEARCH_REGEX" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.toggleCase",
+  name: "Toggle Case Sensitive",
+  category: "Search",
+  execute: () => {
+    store.dispatch({ type: "TOGGLE_SEARCH_CASE" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.toggleWholeWord",
+  name: "Toggle Whole Word",
+  category: "Search",
+  execute: () => {
+    store.dispatch({ type: "TOGGLE_SEARCH_WHOLE_WORD" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.replace",
+  name: "Replace Current Match",
+  category: "Search",
+  execute: () => {
+    store.dispatch({ type: "REPLACE_MATCH" })
+  },
+})
+
+commandRegistry.register({
+  id: "search.replaceAll",
+  name: "Replace All Matches",
+  category: "Search",
+  execute: () => {
+    store.dispatch({ type: "REPLACE_ALL_MATCHES" })
+  },
+})
+
+// LSP Operations
+commandRegistry.register({
+  id: "lsp.goToDefinition",
+  name: "Go to Definition",
+  category: "LSP",
+  description: "Jump to symbol definition (gd in normal mode)",
+  execute: async () => {
+    const state = store.getState()
+    const pane = getActivePane(state)
+    if (!pane?.activeTabId) return
+    const activeTab = pane.tabs.find(t => t.id === pane.activeTabId)
+    if (!activeTab) return
+    const buffer = state.buffers.get(activeTab.bufferId)
+    if (!buffer?.filePath || !buffer.language) return
+
+    const { lsp } = await import("../adapters/index.ts")
+    const languageMap: Record<string, string> = {
+      typescriptreact: "typescript",
+      javascriptreact: "typescript",
+      javascript: "typescript",
+    }
+    const lang = languageMap[buffer.language] ?? buffer.language
+    const client = lsp.getClient(lang)
+    if (!client?.isReady) return
+
+    const uri = `file://${buffer.filePath}`
+    const result = await client.definition(uri, buffer.cursorPosition)
+    if (!result) {
+      store.dispatch({
+        type: "SHOW_NOTIFICATION",
+        notification: {
+          id: `lsp-def-${Date.now()}`,
+          type: "info",
+          message: "No definition found",
+          timestamp: Date.now(),
+        },
+      })
+      return
+    }
+
+    // Open file at definition location
+    const filePath = result.uri.replace("file://", "")
+    await commandRegistry.execute("file.open", { args: [filePath] })
+
+    // Set cursor to definition position after file opens
+    setTimeout(() => {
+      const newState = store.getState()
+      const newPane = getActivePane(newState)
+      if (!newPane?.activeTabId) return
+      const newTab = newPane.tabs.find(t => t.id === newPane.activeTabId)
+      if (!newTab) return
+      store.dispatch({
+        type: "SET_CURSOR",
+        bufferId: newTab.bufferId,
+        position: result.range.start,
+      })
+    }, 100)
+  },
+})
+
+// Git Operations
+commandRegistry.register({
+  id: "git.togglePanel",
+  name: "Git Status (Explorer)",
+  category: "Git",
+  description: "Show git status in explorer (Ctrl+Shift+G)",
+  execute: () => {
+    const state = store.getState()
+    // Switch explorer to Git tab and focus it
+    store.dispatch({ type: "SET_EXPLORER_TAB", tab: "git" })
+    if (!state.explorerVisible) {
+      store.dispatch({ type: "TOGGLE_EXPLORER" })
+    }
+    store.dispatch({ type: "SET_FOCUS", target: "explorer" })
+  },
+})
+
+commandRegistry.register({
+  id: "git.showLog",
+  name: "Git Log",
+  category: "Git",
+  description: "Show git commit log with graph",
+  execute: async () => {
+    const state = store.getState()
+    const rootPath = state.workspace.rootPath
+    if (!rootPath) return
+
+    const { git } = await import("../adapters/index.ts")
+    store.dispatch({ type: "SET_GIT_PANEL_TAB", tab: "log" })
+    if (!state.gitPanel.isOpen) {
+      store.dispatch({ type: "TOGGLE_GIT_PANEL" })
+    }
+
+    try {
+      const [entries, graph] = await Promise.all([
+        git.log(rootPath, 50),
+        git.logGraph(rootPath, 50),
+      ])
+      store.dispatch({ type: "SET_GIT_LOG_ENTRIES", entries })
+      store.dispatch({ type: "SET_GIT_LOG_GRAPH", graph })
+    } catch (error) {
+      console.error("Failed to load git log:", error)
+    }
+  },
+})
+
+commandRegistry.register({
+  id: "git.blame",
+  name: "Git Blame",
+  category: "Git",
+  description: "Show blame annotations for current file",
+  execute: async () => {
+    const state = store.getState()
+    const rootPath = state.workspace.rootPath
+    if (!rootPath) return
+
+    const pane = getActivePane(state)
+    if (!pane?.activeTabId) return
+    const activeTab = pane.tabs.find(t => t.id === pane.activeTabId)
+    if (!activeTab) return
+    const buffer = state.buffers.get(activeTab.bufferId)
+    if (!buffer?.filePath) return
+
+    const { git } = await import("../adapters/index.ts")
+    try {
+      const lines = await git.blame(rootPath, buffer.filePath)
+      store.dispatch({ type: "SET_GIT_BLAME_LINES", lines })
+      store.dispatch({ type: "SET_GIT_PANEL_TAB", tab: "status" })
+      if (!state.gitPanel.isOpen) {
+        store.dispatch({ type: "TOGGLE_GIT_PANEL" })
+      }
+    } catch (error) {
+      store.dispatch({
+        type: "SHOW_NOTIFICATION",
+        notification: {
+          id: `blame-error-${Date.now()}`,
+          type: "error",
+          message: `Blame failed: ${error}`,
+          timestamp: Date.now(),
+        },
+      })
+    }
+  },
+})
+
+commandRegistry.register({
+  id: "git.diff",
+  name: "Git Diff",
+  category: "Git",
+  description: "Show diff for selected file",
+  execute: async () => {
+    const state = store.getState()
+    const rootPath = state.workspace.rootPath
+    if (!rootPath) return
+
+    const file = state.gitPanel.selectedFile
+    const { git } = await import("../adapters/index.ts")
+    try {
+      const [working, staged] = await Promise.all([
+        git.diff(rootPath, file ?? undefined),
+        git.diffStaged(rootPath, file ?? undefined),
+      ])
+      store.dispatch({ type: "SET_GIT_DIFF_CONTENT", content: working })
+      store.dispatch({ type: "SET_GIT_STAGED_DIFF_CONTENT", content: staged })
+      store.dispatch({ type: "SET_GIT_PANEL_TAB", tab: "diff" })
+    } catch (error) {
+      console.error("Failed to load diff:", error)
+    }
+  },
+})
+
+commandRegistry.register({
+  id: "git.diffview",
+  name: "Open Diffview",
+  category: "Git",
+  description: "Open full-screen diff viewer (like Neovim DiffviewOpen)",
+  execute: () => {
+    const state = store.getState()
+    if (!state.git.isRepo) return
+    // Open diffview — the component will load the first file
+    store.dispatch({
+      type: "OPEN_DIFFVIEW",
+      file: "",
+      oldCode: "",
+      newCode: "",
+      language: null,
+    })
+  },
+})
+
+commandRegistry.register({
+  id: "git.closeDiffview",
+  name: "Close Diffview",
+  category: "Git",
+  execute: () => {
+    store.dispatch({ type: "CLOSE_DIFFVIEW" })
+  },
+})
+
+commandRegistry.register({
+  id: "git.unstageAll",
+  name: "Unstage All Changes",
+  category: "Git",
+  execute: async () => {
+    const state = store.getState()
+    const rootPath = state.workspace.rootPath
+    if (!rootPath) return
+
+    const { git } = await import("../adapters/index.ts")
+    const { refreshGitStatus } = await import("./git-runtime.ts")
+    const files = state.git.staged.map(f => f.path)
+    if (files.length === 0) return
+    await git.unstage(rootPath, files)
+    refreshGitStatus()
+  },
+})
+
+commandRegistry.register({
+  id: "git.stageAll",
+  name: "Stage All Changes",
+  category: "Git",
+  execute: async () => {
+    const state = store.getState()
+    const rootPath = state.workspace.rootPath
+    if (!rootPath) return
+
+    const { git } = await import("../adapters/index.ts")
+    const { refreshGitStatus } = await import("./git-runtime.ts")
+    const files = [
+      ...state.git.unstaged.map(f => f.path),
+      ...state.git.untracked,
+    ]
+    if (files.length === 0) return
+    await git.stage(rootPath, files)
+    refreshGitStatus()
   },
 })
 

@@ -2,7 +2,7 @@
  * Main App Component - Root layout for Open IDE
  */
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useTerminalDimensions } from "@opentui/react"
 import { useStore } from "./hooks/useStore.ts"
 import { StatusBar } from "./components/StatusBar"
@@ -15,11 +15,16 @@ import { Palette } from "./components/Palette"
 import { FilePicker } from "./components/FilePicker"
 import { ThemePicker } from "./components/ThemePicker"
 import { KeybindingsHelp } from "./components/KeybindingsHelp"
+import { SearchBar } from "./components/SearchBar"
+import { SearchPanel } from "./components/SearchPanel"
 import { useKeybindings } from "./hooks/useKeybindings.ts"
 import { commandRegistry, parseAndExecuteCommand } from "../application/commands.ts"
-import { fileSystem } from "../adapters/index.ts"
+import { fileSystem, git } from "../adapters/index.ts"
 import { setTreeSitterWorkspaceRoot } from "../shared/index.ts"
 import { initializeLspRuntime, shutdownLspRuntime } from "../application/lsp-runtime.ts"
+import { initializeGitRuntime, shutdownGitRuntime } from "../application/git-runtime.ts"
+import { NotificationStack } from "./components/NotificationStack"
+import { DiffviewFilePanel } from "./components/DiffviewFilePanel"
 
 export function App() {
   const { width, height } = useTerminalDimensions()
@@ -32,11 +37,15 @@ export function App() {
     initializeLspRuntime().catch(error => {
       console.error("Failed to initialize LSP runtime:", error)
     })
+    initializeGitRuntime().catch(error => {
+      console.error("Failed to initialize git runtime:", error)
+    })
 
     return () => {
       shutdownLspRuntime().catch(error => {
         console.error("Failed to shutdown LSP runtime:", error)
       })
+      shutdownGitRuntime()
     }
   }, [])
 
@@ -91,6 +100,82 @@ export function App() {
   const activeBuffer = activeTab ? (state.buffers.get(activeTab.bufferId) ?? null) : null
   const activeDiagnostics = activeBuffer ? (state.diagnostics.get(activeBuffer.id) ?? []) : []
 
+  // Auto-fetch git blame for active buffer
+  const lastBlameFileRef = useRef<string | null>(null)
+  useEffect(() => {
+    const filePath = activeBuffer?.filePath
+    const rootPath = state.workspace.rootPath
+    if (!filePath || !rootPath || !state.git.isRepo) {
+      if (lastBlameFileRef.current !== null) {
+        dispatch({ type: "SET_GIT_BLAME_LINES", lines: [] })
+        lastBlameFileRef.current = null
+      }
+      return
+    }
+
+    if (lastBlameFileRef.current === filePath) return
+    lastBlameFileRef.current = filePath
+
+    const relativePath = filePath.startsWith(rootPath)
+      ? filePath.slice(rootPath.length + 1)
+      : filePath
+
+    git.blame(rootPath, relativePath)
+      .then(lines => {
+        if (lastBlameFileRef.current === filePath) {
+          dispatch({ type: "SET_GIT_BLAME_LINES", lines })
+        }
+      })
+      .catch(() => {
+        dispatch({ type: "SET_GIT_BLAME_LINES", lines: [] })
+      })
+  }, [activeBuffer?.filePath, state.workspace.rootPath, state.git.isRepo])
+
+  // Refetch blame after save
+  const wasDirtyRef = useRef(false)
+  useEffect(() => {
+    if (!activeBuffer) return
+    if (wasDirtyRef.current && !activeBuffer.isDirty) {
+      const filePath = activeBuffer.filePath
+      const rootPath = state.workspace.rootPath
+      if (filePath && rootPath) {
+        const relativePath = filePath.startsWith(rootPath)
+          ? filePath.slice(rootPath.length + 1)
+          : filePath
+        git.blame(rootPath, relativePath)
+          .then(lines => dispatch({ type: "SET_GIT_BLAME_LINES", lines }))
+          .catch(() => {})
+      }
+    }
+    wasDirtyRef.current = activeBuffer.isDirty
+  }, [activeBuffer?.isDirty, activeBuffer?.filePath, state.workspace.rootPath])
+
+  // Full-screen Diffview mode
+  if (state.diffview.isOpen) {
+    return (
+      <box width={width} height={height} flexDirection="column"
+        backgroundColor={state.theme.colors.background}>
+        <DiffviewFilePanel
+          theme={state.theme}
+          width={width}
+          height={height - 1}
+          gitState={state.git}
+          diffview={state.diffview}
+          rootPath={state.workspace.rootPath}
+        />
+        <StatusBar
+          theme={state.theme}
+          width={width}
+          buffer={activeBuffer}
+          diagnostics={activeDiagnostics}
+          focusTarget={state.focusTarget}
+          editorMode={state.editorMode}
+          gitState={state.git}
+        />
+      </box>
+    )
+  }
+
   return (
     <box
       width={width}
@@ -118,6 +203,9 @@ export function App() {
             rootPath={state.workspace.rootPath}
             theme={state.theme}
             focused={state.focusTarget === "explorer"}
+            buffers={state.buffers}
+            gitState={state.git}
+            explorerTab={state.explorerTab}
           />
         )}
 
@@ -137,9 +225,28 @@ export function App() {
             diagnostics={activeDiagnostics}
             theme={state.theme}
             width={editorWidth}
-            height={editorHeight}
+            height={
+              state.search.isOpen && state.search.mode === "project"
+                ? Math.floor(editorHeight * 0.6)
+                : editorHeight
+            }
             focused={state.focusTarget === "editor"}
+            searchMatches={state.search.matches}
+            currentMatchIndex={state.search.currentMatchIndex}
+            blameLines={state.gitPanel.blameLines}
           />
+
+          {/* Project Search Results Panel */}
+          {state.search.isOpen && state.search.mode === "project" && (
+            <SearchPanel
+              theme={state.theme}
+              width={editorWidth}
+              height={Math.floor(editorHeight * 0.4)}
+              results={state.search.projectResults}
+              query={state.search.query}
+              focused={false}
+            />
+          )}
 
           {/* Terminal Area (when visible) */}
           {state.terminals.size > 0 && (
@@ -154,6 +261,7 @@ export function App() {
             </box>
           )}
         </box>
+
       </box>
 
       {/* Status Bar */}
@@ -164,6 +272,7 @@ export function App() {
         diagnostics={activeDiagnostics}
         focusTarget={state.focusTarget}
         editorMode={state.editorMode}
+        gitState={state.git}
       />
 
       {/* Command Line Overlay */}
@@ -248,6 +357,35 @@ export function App() {
           width={Math.min(76, width - 4)}
           height={Math.min(20, height - 4)}
           onClose={() => dispatch({ type: "CLOSE_KEYBINDINGS_HELP" })}
+        />
+      )}
+
+      {/* Search Bar Overlay - positioned at bottom like vim */}
+      {state.search.isOpen && (
+        <box position="absolute" bottom={1} left={0} width={width} zIndex={90}>
+          <SearchBar
+            theme={state.theme}
+            width={width}
+            query={state.search.query}
+            replaceText={state.search.replaceText}
+            isRegex={state.search.isRegex}
+            isCaseSensitive={state.search.isCaseSensitive}
+            isWholeWord={state.search.isWholeWord}
+            matches={state.search.matches}
+            currentMatchIndex={state.search.currentMatchIndex}
+            mode={state.search.mode}
+            bufferContent={activeBuffer?.content ?? null}
+          />
+        </box>
+      )}
+
+      {/* Notifications */}
+      {state.notifications.length > 0 && (
+        <NotificationStack
+          theme={state.theme}
+          notifications={state.notifications}
+          width={width}
+          height={height}
         />
       )}
     </box>

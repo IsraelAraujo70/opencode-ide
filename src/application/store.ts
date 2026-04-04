@@ -15,6 +15,11 @@ import type {
   FocusTarget,
   DirectoryTree,
   TerminalState,
+  SearchState,
+  GitState,
+  CompletionState,
+  GitPanelState,
+  DiffviewState,
 } from "../domain/types.ts"
 import { defaultTheme, defaultThemes } from "../domain/themes.ts"
 
@@ -46,9 +51,10 @@ export const createInitialState = (): AppState => ({
   layout: createInitialLayout(),
   explorerWidth: 25,
   explorerVisible: true,
+  explorerTab: "file",
   theme: defaultTheme,
   focusTarget: "editor",
-  editorMode: "insert",
+  editorMode: "normal",
   commandLine: {
     isOpen: false,
     value: "",
@@ -70,6 +76,54 @@ export const createInitialState = (): AppState => ({
   },
   terminals: new Map(),
   diagnostics: new Map(),
+  search: {
+    isOpen: false,
+    mode: "file",
+    query: "",
+    replaceText: "",
+    isRegex: false,
+    isCaseSensitive: false,
+    isWholeWord: false,
+    matches: [],
+    currentMatchIndex: -1,
+    projectResults: [],
+  },
+  git: {
+    isRepo: false,
+    branch: "",
+    ahead: 0,
+    behind: 0,
+    staged: [],
+    unstaged: [],
+    untracked: [],
+    isLoading: false,
+  },
+  gitPanel: {
+    isOpen: false,
+    activeTab: "status",
+    selectedFile: null,
+    diffContent: null,
+    stagedDiffContent: null,
+    diffMode: "working",
+    logEntries: [],
+    logGraphOutput: null,
+    blameLines: [],
+  },
+  diffview: {
+    isOpen: false,
+    selectedFile: null,
+    selectedIndex: 0,
+    oldCode: "",
+    newCode: "",
+    language: null,
+  },
+  completion: {
+    isOpen: false,
+    items: [],
+    selectedIndex: 0,
+    triggerPosition: { line: 0, column: 0, offset: 0 },
+  },
+  notifications: [],
 })
 
 // ============================================================================
@@ -356,6 +410,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, explorerVisible, focusTarget }
     }
 
+    case "SET_EXPLORER_TAB": {
+      return { ...state, explorerTab: action.tab }
+    }
+
     case "SWITCH_TAB": {
       const pane = getActivePane(state.layout)
       if (!pane) return state
@@ -637,6 +695,335 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.workspace,
           directoryTree: loadChildrenInTree(state.workspace.directoryTree),
         },
+      }
+    }
+
+    // ========== Search ==========
+    case "OPEN_SEARCH": {
+      return {
+        ...state,
+        search: {
+          ...state.search,
+          isOpen: true,
+          mode: action.mode ?? state.search.mode,
+        },
+      }
+    }
+
+    case "CLOSE_SEARCH": {
+      return {
+        ...state,
+        search: {
+          ...state.search,
+          isOpen: false,
+          matches: [],
+          currentMatchIndex: -1,
+          projectResults: [],
+        },
+        focusTarget: "editor",
+      }
+    }
+
+    case "SET_SEARCH_QUERY": {
+      return {
+        ...state,
+        search: {
+          ...state.search,
+          query: action.query,
+          currentMatchIndex: -1,
+        },
+      }
+    }
+
+    case "SET_SEARCH_REPLACE": {
+      return {
+        ...state,
+        search: { ...state.search, replaceText: action.replaceText },
+      }
+    }
+
+    case "SET_SEARCH_MATCHES": {
+      return {
+        ...state,
+        search: {
+          ...state.search,
+          matches: action.matches,
+          currentMatchIndex: action.matches.length > 0 ? 0 : -1,
+        },
+      }
+    }
+
+    case "NEXT_MATCH": {
+      const { matches, currentMatchIndex } = state.search
+      if (matches.length === 0) return state
+      const next = (currentMatchIndex + 1) % matches.length
+      return {
+        ...state,
+        search: { ...state.search, currentMatchIndex: next },
+      }
+    }
+
+    case "PREV_MATCH": {
+      const { matches, currentMatchIndex } = state.search
+      if (matches.length === 0) return state
+      const prev = currentMatchIndex <= 0 ? matches.length - 1 : currentMatchIndex - 1
+      return {
+        ...state,
+        search: { ...state.search, currentMatchIndex: prev },
+      }
+    }
+
+    case "TOGGLE_SEARCH_REGEX": {
+      return {
+        ...state,
+        search: { ...state.search, isRegex: !state.search.isRegex },
+      }
+    }
+
+    case "TOGGLE_SEARCH_CASE": {
+      return {
+        ...state,
+        search: { ...state.search, isCaseSensitive: !state.search.isCaseSensitive },
+      }
+    }
+
+    case "TOGGLE_SEARCH_WHOLE_WORD": {
+      return {
+        ...state,
+        search: { ...state.search, isWholeWord: !state.search.isWholeWord },
+      }
+    }
+
+    case "SET_PROJECT_SEARCH_RESULTS": {
+      return {
+        ...state,
+        search: { ...state.search, projectResults: action.results },
+      }
+    }
+
+    case "REPLACE_MATCH": {
+      const { matches, currentMatchIndex, replaceText } = state.search
+      if (currentMatchIndex < 0 || currentMatchIndex >= matches.length) return state
+
+      const pane = getActivePane(state.layout)
+      if (!pane?.activeTabId) return state
+      const activeTab = pane.tabs.find(t => t.id === pane.activeTabId)
+      if (!activeTab) return state
+      const buffer = state.buffers.get(activeTab.bufferId)
+      if (!buffer) return state
+
+      const match = matches[currentMatchIndex]!
+      const lines = buffer.content.split("\n")
+      const line = lines[match.line]
+      if (!line) return state
+
+      const newLine = line.slice(0, match.column) + replaceText + line.slice(match.column + match.length)
+      lines[match.line] = newLine
+      const newContent = lines.join("\n")
+
+      const newBuffers = new Map(state.buffers)
+      newBuffers.set(activeTab.bufferId, { ...buffer, content: newContent, isDirty: true })
+
+      // Remove the replaced match and adjust index
+      const newMatches = matches.filter((_, i) => i !== currentMatchIndex)
+      const newIndex = newMatches.length > 0 ? Math.min(currentMatchIndex, newMatches.length - 1) : -1
+
+      return {
+        ...state,
+        buffers: newBuffers,
+        search: { ...state.search, matches: newMatches, currentMatchIndex: newIndex },
+      }
+    }
+
+    case "REPLACE_ALL_MATCHES": {
+      const { matches, replaceText } = state.search
+      if (matches.length === 0) return state
+
+      const pane = getActivePane(state.layout)
+      if (!pane?.activeTabId) return state
+      const activeTab = pane.tabs.find(t => t.id === pane.activeTabId)
+      if (!activeTab) return state
+      const buffer = state.buffers.get(activeTab.bufferId)
+      if (!buffer) return state
+
+      // Replace from bottom to top to preserve line/column positions
+      const lines = buffer.content.split("\n")
+      const sorted = [...matches].sort((a, b) => b.line - a.line || b.column - a.column)
+      for (const match of sorted) {
+        const line = lines[match.line]
+        if (!line) continue
+        lines[match.line] = line.slice(0, match.column) + replaceText + line.slice(match.column + match.length)
+      }
+
+      const newBuffers = new Map(state.buffers)
+      newBuffers.set(activeTab.bufferId, { ...buffer, content: lines.join("\n"), isDirty: true })
+
+      return {
+        ...state,
+        buffers: newBuffers,
+        search: { ...state.search, matches: [], currentMatchIndex: -1 },
+      }
+    }
+
+    // ========== Git ==========
+    case "SET_GIT_STATUS": {
+      return { ...state, git: action.git }
+    }
+
+    case "SET_GIT_LOADING": {
+      return { ...state, git: { ...state.git, isLoading: action.isLoading } }
+    }
+
+    // ========== Git Panel ==========
+    case "TOGGLE_GIT_PANEL": {
+      const isOpen = !state.gitPanel.isOpen
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, isOpen },
+        focusTarget: isOpen ? "gitPanel" : "editor",
+      }
+    }
+
+    case "CLOSE_GIT_PANEL": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, isOpen: false },
+        focusTarget: "editor",
+      }
+    }
+
+    case "SET_GIT_PANEL_TAB": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, activeTab: action.tab },
+      }
+    }
+
+    case "SET_GIT_PANEL_SELECTED_FILE": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, selectedFile: action.file },
+      }
+    }
+
+    case "SET_GIT_DIFF_CONTENT": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, diffContent: action.content },
+      }
+    }
+
+    case "SET_GIT_LOG_ENTRIES": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, logEntries: action.entries },
+      }
+    }
+
+    case "SET_GIT_BLAME_LINES": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, blameLines: action.lines },
+      }
+    }
+
+    case "SET_GIT_LOG_GRAPH": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, logGraphOutput: action.graph },
+      }
+    }
+
+    case "SET_GIT_DIFF_MODE": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, diffMode: action.mode },
+      }
+    }
+
+    case "SET_GIT_STAGED_DIFF_CONTENT": {
+      return {
+        ...state,
+        gitPanel: { ...state.gitPanel, stagedDiffContent: action.content },
+      }
+    }
+
+    // ========== Diffview ==========
+    case "OPEN_DIFFVIEW": {
+      return {
+        ...state,
+        diffview: {
+          isOpen: true,
+          selectedFile: action.file,
+          selectedIndex: 0,
+          oldCode: action.oldCode,
+          newCode: action.newCode,
+          language: action.language,
+        },
+      }
+    }
+
+    case "CLOSE_DIFFVIEW": {
+      return {
+        ...state,
+        diffview: { ...state.diffview, isOpen: false },
+        focusTarget: "editor",
+      }
+    }
+
+    case "SET_DIFFVIEW_FILE": {
+      return {
+        ...state,
+        diffview: {
+          ...state.diffview,
+          selectedFile: action.file,
+          selectedIndex: action.index,
+          oldCode: action.oldCode,
+          newCode: action.newCode,
+          language: action.language,
+        },
+      }
+    }
+
+    // ========== Completion ==========
+    case "OPEN_COMPLETION": {
+      return {
+        ...state,
+        completion: {
+          isOpen: true,
+          items: action.items,
+          selectedIndex: 0,
+          triggerPosition: action.triggerPosition,
+        },
+      }
+    }
+
+    case "CLOSE_COMPLETION": {
+      return {
+        ...state,
+        completion: { ...state.completion, isOpen: false, items: [], selectedIndex: 0 },
+      }
+    }
+
+    case "SET_COMPLETION_INDEX": {
+      return {
+        ...state,
+        completion: { ...state.completion, selectedIndex: action.index },
+      }
+    }
+
+    // ========== Notifications ==========
+    case "SHOW_NOTIFICATION": {
+      return {
+        ...state,
+        notifications: [...state.notifications, action.notification],
+      }
+    }
+
+    case "DISMISS_NOTIFICATION": {
+      return {
+        ...state,
+        notifications: state.notifications.filter(n => n.id !== action.id),
       }
     }
 

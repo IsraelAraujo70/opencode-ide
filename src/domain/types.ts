@@ -189,10 +189,125 @@ export interface HoverInfo {
 }
 
 // ============================================================================
+// Search
+// ============================================================================
+
+export interface SearchMatch {
+  line: number
+  column: number
+  length: number
+}
+
+export interface ProjectSearchResult {
+  filePath: string
+  matches: SearchMatch[]
+  preview: string
+}
+
+export interface SearchState {
+  isOpen: boolean
+  mode: "file" | "project"
+  query: string
+  replaceText: string
+  isRegex: boolean
+  isCaseSensitive: boolean
+  isWholeWord: boolean
+  matches: SearchMatch[]
+  currentMatchIndex: number
+  projectResults: ProjectSearchResult[]
+}
+
+// ============================================================================
+// Git
+// ============================================================================
+
+export type GitFileStatus = "modified" | "added" | "deleted" | "renamed" | "copied" | "untracked"
+
+export interface GitFileChange {
+  path: string
+  status: GitFileStatus
+}
+
+export interface GitLogEntry {
+  hash: string
+  author: string
+  date: string
+  message: string
+}
+
+export interface GitBlameLine {
+  hash: string
+  author: string
+  date: string
+  lineNumber: number
+  content: string
+}
+
+export type GitPanelTab = "status" | "log" | "diff"
+
+export type GitDiffMode = "working" | "staged"
+
+export interface GitPanelState {
+  isOpen: boolean
+  activeTab: GitPanelTab
+  selectedFile: string | null
+  diffContent: string | null
+  stagedDiffContent: string | null
+  diffMode: GitDiffMode
+  logEntries: GitLogEntry[]
+  logGraphOutput: string | null
+  blameLines: GitBlameLine[]
+}
+
+export interface DiffviewState {
+  isOpen: boolean
+  selectedFile: string | null
+  selectedIndex: number
+  oldCode: string
+  newCode: string
+  language: string | null
+}
+
+export interface GitState {
+  isRepo: boolean
+  branch: string
+  ahead: number
+  behind: number
+  staged: GitFileChange[]
+  unstaged: GitFileChange[]
+  untracked: string[]
+  isLoading: boolean
+}
+
+// ============================================================================
+// Completion
+// ============================================================================
+
+export interface CompletionState {
+  isOpen: boolean
+  items: CompletionItem[]
+  selectedIndex: number
+  triggerPosition: CursorPosition
+}
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+export type NotificationType = "info" | "success" | "warning" | "error"
+
+export interface Notification {
+  id: string
+  type: NotificationType
+  message: string
+  timestamp: number
+}
+
+// ============================================================================
 // App State
 // ============================================================================
 
-export type FocusTarget = "editor" | "commandLine" | "explorer" | "terminal" | "palette"
+export type FocusTarget = "editor" | "commandLine" | "explorer" | "terminal" | "palette" | "gitPanel"
 export type EditorMode = "normal" | "insert"
 
 export interface AppState {
@@ -204,6 +319,7 @@ export interface AppState {
   layout: PaneLayout
   explorerWidth: number
   explorerVisible: boolean
+  explorerTab: "file" | "bufs" | "git"
   theme: Theme
   focusTarget: FocusTarget
   editorMode: EditorMode
@@ -228,6 +344,12 @@ export interface AppState {
   }
   terminals: Map<string, TerminalState>
   diagnostics: Map<string, Diagnostic[]> // bufferId -> diagnostics
+  search: SearchState
+  git: GitState
+  gitPanel: GitPanelState
+  diffview: DiffviewState
+  completion: CompletionState
+  notifications: Notification[]
 }
 
 export interface PaletteItem {
@@ -296,6 +418,7 @@ export type AppAction =
   // Explorer
   | { type: "SET_EXPLORER_WIDTH"; width: number }
   | { type: "TOGGLE_EXPLORER" }
+  | { type: "SET_EXPLORER_TAB"; tab: "file" | "bufs" | "git" }
 
   // File Picker
   | { type: "OPEN_FILE_PICKER"; mode?: "file" | "project" }
@@ -316,3 +439,48 @@ export type AppAction =
   | { type: "SET_BUFFER_DIAGNOSTICS"; bufferId: string; diagnostics: Diagnostic[] }
   | { type: "CLEAR_BUFFER_DIAGNOSTICS"; bufferId: string }
   | { type: "CLEAR_ALL_DIAGNOSTICS" }
+
+  // Search
+  | { type: "OPEN_SEARCH"; mode?: "file" | "project" }
+  | { type: "CLOSE_SEARCH" }
+  | { type: "SET_SEARCH_QUERY"; query: string }
+  | { type: "SET_SEARCH_REPLACE"; replaceText: string }
+  | { type: "SET_SEARCH_MATCHES"; matches: SearchMatch[] }
+  | { type: "NEXT_MATCH" }
+  | { type: "PREV_MATCH" }
+  | { type: "TOGGLE_SEARCH_REGEX" }
+  | { type: "TOGGLE_SEARCH_CASE" }
+  | { type: "TOGGLE_SEARCH_WHOLE_WORD" }
+  | { type: "SET_PROJECT_SEARCH_RESULTS"; results: ProjectSearchResult[] }
+  | { type: "REPLACE_MATCH" }
+  | { type: "REPLACE_ALL_MATCHES" }
+
+  // Git
+  | { type: "SET_GIT_STATUS"; git: GitState }
+  | { type: "SET_GIT_LOADING"; isLoading: boolean }
+
+  // Git Panel
+  | { type: "TOGGLE_GIT_PANEL" }
+  | { type: "CLOSE_GIT_PANEL" }
+  | { type: "SET_GIT_PANEL_TAB"; tab: GitPanelTab }
+  | { type: "SET_GIT_PANEL_SELECTED_FILE"; file: string | null }
+  | { type: "SET_GIT_DIFF_CONTENT"; content: string | null }
+  | { type: "SET_GIT_LOG_ENTRIES"; entries: GitLogEntry[] }
+  | { type: "SET_GIT_BLAME_LINES"; lines: GitBlameLine[] }
+  | { type: "SET_GIT_LOG_GRAPH"; graph: string }
+  | { type: "SET_GIT_DIFF_MODE"; mode: GitDiffMode }
+  | { type: "SET_GIT_STAGED_DIFF_CONTENT"; content: string | null }
+
+  // Diffview (full-screen diff mode)
+  | { type: "OPEN_DIFFVIEW"; file: string; oldCode: string; newCode: string; language: string | null }
+  | { type: "CLOSE_DIFFVIEW" }
+  | { type: "SET_DIFFVIEW_FILE"; file: string; oldCode: string; newCode: string; language: string | null; index: number }
+
+  // Completion
+  | { type: "OPEN_COMPLETION"; items: CompletionItem[]; triggerPosition: CursorPosition }
+  | { type: "CLOSE_COMPLETION" }
+  | { type: "SET_COMPLETION_INDEX"; index: number }
+
+  // Notifications
+  | { type: "SHOW_NOTIFICATION"; notification: Notification }
+  | { type: "DISMISS_NOTIFICATION"; id: string }
