@@ -1,5 +1,9 @@
 /**
  * ResizeHandle Component - Draggable vertical splitter
+ *
+ * Uses onMouseDrag/onMouseDragEnd which leverage OpenTUI's
+ * capturedRenderable mechanism — all drag events route to this
+ * element even when the cursor moves outside it.
  */
 
 import { useRef, useState } from "react"
@@ -25,9 +29,9 @@ export function ResizeHandle({ height, theme, explorerWidth, onResize }: ResizeH
     event.stopPropagation()
     event.preventDefault()
 
-    setIsDragging(true)
     dragStartX.current = event.x
     dragStartWidth.current = explorerWidth
+    setIsDragging(true)
   }
 
   const handleMouseDrag = (event: MouseEvent) => {
@@ -40,34 +44,37 @@ export function ResizeHandle({ height, theme, explorerWidth, onResize }: ResizeH
     onResize(dragStartWidth.current + deltaX)
   }
 
-  const endDrag = (event: MouseEvent) => {
+  const handleDragEnd = (event: MouseEvent) => {
     event.stopPropagation()
     event.preventDefault()
 
-    setIsDragging(false)
     dragStartX.current = null
+    setIsDragging(false)
   }
 
-  const bg = isDragging || isHovered ? colors.lineHighlight : colors.background
-  const borderColor = isDragging || isHovered ? colors.primary : colors.border
-  const borderStyle = isDragging ? "double" : "single"
+  const backgroundColor = isDragging || isHovered ? colors.lineHighlight : colors.background
+  const foregroundColor = isDragging || isHovered ? colors.primary : colors.border
+  const glyph = isDragging ? "║" : "│"
 
-  // Use box borders for drawing so the entire handle
-  // is one renderable (better hitbox + avoids text selection).
   return (
     <box
       width={2}
       height={height}
-      backgroundColor={bg}
-      borderStyle={borderStyle}
-      border={["left", "right"]}
-      borderColor={borderColor}
+      backgroundColor={backgroundColor}
       onMouseDown={handleMouseDown}
       onMouseDrag={handleMouseDrag}
-      onMouseDragEnd={endDrag}
-      onMouseUp={endDrag}
+      onMouseDragEnd={handleDragEnd}
+      onMouseUp={handleDragEnd}
       onMouseOver={() => setIsHovered(true)}
       onMouseOut={() => setIsHovered(false)}
-    />
+    >
+      <box flexDirection="column">
+        {Array.from({ length: height }, (_, index) => (
+          <text key={index} fg={foregroundColor} bg={backgroundColor} selectable={false}>
+            {` ${glyph}`}
+          </text>
+        ))}
+      </box>
+    </box>
   )
 }
